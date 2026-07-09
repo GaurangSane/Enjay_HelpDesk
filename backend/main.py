@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from routers import tickets
+from routers import tickets, webhooks
 
 app = FastAPI(
     title="Enjay Helpdesk Backend",
@@ -29,6 +29,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(tickets.router)
+app.include_router(webhooks.router)
 
 @app.get("/health")
 def health_check():
