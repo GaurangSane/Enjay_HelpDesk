@@ -9,7 +9,7 @@ from services.embedding import generate_dense_embedding, generate_sparse_embeddi
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL_VERSION = "text-embedding-004-v1"
+EMBEDDING_MODEL_VERSION = "gemini-embedding-001"
 
 # ---------------------------------------------------------------------------
 # Helper
