@@ -6,7 +6,7 @@ import google.generativeai as genai
 from fastembed import SparseTextEmbedding
 from qdrant_client.models import PointStruct, SparseVector
 
-from db.qdrant_client import qdrant, DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME
+from backend.db.qdrant_client import qdrant, DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME
 
 logger = logging.getLogger(__name__)
 

@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 
 # Ensure backend modules are importable
 SCRIPT_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = SCRIPT_DIR.parent / "backend"
-sys.path.insert(0, str(BACKEND_DIR))
-load_dotenv(dotenv_path=BACKEND_DIR / ".env")
+PROJECT_ROOT = SCRIPT_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+load_dotenv(dotenv_path=PROJECT_ROOT / ".env")
 
 from backend.services.query_generation import generate_standalone_query
 

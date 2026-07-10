@@ -1,11 +1,9 @@
 import os
+import backend.config  # noqa: F401 — loads .env via absolute path before anything else
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 
-load_dotenv()
-
-from routers import tickets, webhooks
+from backend.routers import tickets, webhooks
 
 app = FastAPI(
     title="Enjay Helpdesk Backend",
@@ -13,10 +11,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS Middleware Configuration
+# CORS Middleware
 origins = [
     "http://localhost:5173",
-    "https://your-app.vercel.app",  # Production frontend placeholder
+    "https://your-app.vercel.app",
 ]
 
 app.add_middleware(

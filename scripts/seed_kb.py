@@ -4,32 +4,25 @@ scripts/seed_kb.py
 One-time script to seed the kb_articles table in Supabase from seed_kb_articles.json
 and queue each article for Qdrant embedding via the sync_kb_article_task Celery task.
 
-Run from the backend/ directory:
-    python ../scripts/seed_kb.py
+Run from the PROJECT ROOT (not inside backend/):
+    python -m scripts.seed_kb
 
-Requirements: .env file must be present and Celery/Redis must be running.
+Requirements: backend/.env must exist and Celery/Redis must be running.
 """
 
 import os
-import sys
 import json
 import time
 import logging
 from pathlib import Path
 
-# ── Make sure backend/ is on sys.path so we can import backend modules ──────
-SCRIPT_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = SCRIPT_DIR.parent / "backend"
-sys.path.insert(0, str(BACKEND_DIR))
-
-from dotenv import load_dotenv
-load_dotenv(dotenv_path=BACKEND_DIR / ".env")
+import backend.config  # noqa: F401 — loads backend/.env via absolute path
 
 from backend.db.supabase_client import supabase
 from backend.services.tasks import sync_kb_article_task
 
 # ── Config ───────────────────────────────────────────────────────────────────
-SEED_FILE = SCRIPT_DIR.parent / "seed_kb_articles.json"
+SEED_FILE = Path(__file__).resolve().parent.parent / "seed_kb_articles.json"
 
 # Google text-embedding-004 allows ~1500 RPM on the free tier.
 # We embed 1 article at a time (potentially multiple chunks), so 1 article

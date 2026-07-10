@@ -1,11 +1,11 @@
 import uuid
 import logging
-from celery_app import celery_app
-from db.supabase_client import supabase
-from db.qdrant_client import KB_ARTICLES_COLLECTION, TICKET_MESSAGES_COLLECTION
-from services.chunking import chunk_text
-from services.sanitize import sanitize_for_llm
-from services.embedding import generate_dense_embedding, generate_sparse_embedding, upsert_to_qdrant
+from backend.celery_app import celery_app
+from backend.db.supabase_client import supabase
+from backend.db.qdrant_client import KB_ARTICLES_COLLECTION, TICKET_MESSAGES_COLLECTION
+from backend.services.chunking import chunk_text
+from backend.services.sanitize import sanitize_for_llm
+from backend.services.embedding import generate_dense_embedding, generate_sparse_embedding, upsert_to_qdrant
 
 logger = logging.getLogger(__name__)
 

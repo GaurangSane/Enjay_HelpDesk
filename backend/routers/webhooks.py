@@ -5,8 +5,8 @@ import httpx
 from fastapi import APIRouter, Request, HTTPException
 from svix.webhooks import Webhook, WebhookVerificationError
 from bs4 import BeautifulSoup
-from db.supabase_client import supabase
-from services.tasks import sync_ticket_message_task
+from backend.db.supabase_client import supabase
+from backend.services.tasks import sync_ticket_message_task
 
 logger = logging.getLogger(__name__)
 

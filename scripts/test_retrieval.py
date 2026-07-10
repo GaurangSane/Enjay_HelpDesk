@@ -7,9 +7,9 @@ Performs Hybrid Search (dense cosine + sparse BM25) against the kb_articles
 collection using Qdrant's query_points API with Prefetch + RRF Fusion, then
 prints the Top-5 results with scores for qualitative evaluation.
 
-Run from the project root:
-    python scripts/test_retrieval.py
-    python scripts/test_retrieval.py "your custom query here"
+Run from the PROJECT ROOT (not inside backend/):
+    python -m scripts.test_retrieval
+    python -m scripts.test_retrieval "your custom query here"
 """
 
 import os
@@ -17,13 +17,7 @@ import sys
 import textwrap
 from pathlib import Path
 
-# ── Ensure backend/ modules are importable ───────────────────────────────────
-SCRIPT_DIR = Path(__file__).resolve().parent
-BACKEND_DIR = SCRIPT_DIR.parent / "backend"
-sys.path.insert(0, str(BACKEND_DIR))
-
-from dotenv import load_dotenv
-load_dotenv(dotenv_path=BACKEND_DIR / ".env")
+import backend.config  # noqa: F401 — loads backend/.env via absolute path
 
 from qdrant_client import models
 from backend.db.qdrant_client import qdrant, KB_ARTICLES_COLLECTION

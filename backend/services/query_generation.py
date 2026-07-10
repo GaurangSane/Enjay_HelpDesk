@@ -15,7 +15,7 @@ Key logic:
 import os
 import logging
 from groq import Groq
-from db.supabase_client import supabase
+from backend.db.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
 
