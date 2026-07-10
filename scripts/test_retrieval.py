@@ -26,8 +26,8 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=BACKEND_DIR / ".env")
 
 from qdrant_client import models
-from db.qdrant_client import qdrant, KB_ARTICLES_COLLECTION
-from services.embedding import generate_dense_embedding, generate_sparse_embedding
+from backend.db.qdrant_client import qdrant, KB_ARTICLES_COLLECTION
+from backend.services.embedding import generate_dense_embedding, generate_sparse_embedding
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 DEFAULT_QUERY = "I'm getting error SNG-4021 when syncing my CRM data"

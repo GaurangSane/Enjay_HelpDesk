@@ -25,8 +25,8 @@ sys.path.insert(0, str(BACKEND_DIR))
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=BACKEND_DIR / ".env")
 
-from db.supabase_client import supabase
-from services.tasks import sync_kb_article_task
+from backend.db.supabase_client import supabase
+from backend.services.tasks import sync_kb_article_task
 
 # ── Config ───────────────────────────────────────────────────────────────────
 SEED_FILE = SCRIPT_DIR.parent / "seed_kb_articles.json"
