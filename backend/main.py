@@ -3,7 +3,14 @@ import backend.config  # noqa: F401 — loads .env via absolute path before anyt
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import tickets, webhooks
+import sentry_sdk
+from backend.routers import tickets, webhooks, kb_articles
+
+sentry_sdk.init(
+    dsn=os.environ['SENTRY_DSN'],
+    traces_sample_rate=0.1,
+    environment='development'
+)
 
 app = FastAPI(
     title="Enjay Helpdesk Backend",
@@ -28,6 +35,7 @@ app.add_middleware(
 # Include routers
 app.include_router(tickets.router)
 app.include_router(webhooks.router)
+app.include_router(kb_articles.router)
 
 @app.get("/health")
 def health_check():

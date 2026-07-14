@@ -64,3 +64,124 @@ body {
 button, input, select, textarea {
   font-family: inherit;
 }
+
+/* Global Dark-Mode Styling Pass & Reset Polish */
+
+/* ── Typography & Headers ────────────────────────────────────────────────────── */
+h2, h3, h4 {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+}
+
+p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ── Custom Scrollbars ───────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ── Forms, Inputs, Buttons ──────────────────────────────────────────────────── */
+input, textarea, select {
+  font-size: var(--font-size-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--border-focus) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15) !important;
+  background-color: var(--bg-primary) !important;
+}
+
+button {
+  transition: filter var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+button:not(:disabled):hover {
+  filter: brightness(1.1);
+}
+
+button:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+/* ── Collapsible Details / Summary ───────────────────────────────────────────── */
+details {
+  border-color: var(--border-color);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+details[open] {
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color var(--transition-fast);
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary:hover {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* ── Table Styling Polish ─────────────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+tr {
+  transition: background-color var(--transition-fast);
+}
+
+tr:hover {
+  background-color: var(--bg-tertiary);
+}
+
+td {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+/* ── Global Utility Cards ───────────────────────────────────────────────────── */
+.card-secondary {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+}

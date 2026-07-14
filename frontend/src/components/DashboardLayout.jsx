@@ -39,7 +39,7 @@ export default function DashboardLayout() {
             backgroundColor: 'var(--bg-tertiary)',
             border: '1px solid var(--border-color)'
           }}>Tickets</Link>
-          <Link to="/kb" style={{
+          <Link to="/knowledge-base" style={{
             color: 'var(--text-primary)',
             textDecoration: 'none',
             padding: 'var(--space-sm)',

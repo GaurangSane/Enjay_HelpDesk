@@ -22,7 +22,7 @@ export default function App() {
         >
           <Route index element={<Tickets />} />
           <Route path="tickets/:id" element={<TicketDetail />} />
-          <Route path="kb" element={<KnowledgeBase />} />
+          <Route path="knowledge-base" element={<KnowledgeBase />} />
         </Route>
       </Routes>
     </Router>
