@@ -283,7 +283,6 @@ def process_ticket_for_ai_answer(ticket_id: str) -> dict[str, Any]:
             "query": query,
             "retrieved_chunks": retrieved_chunks,
         }
-    
 
     # ── Stage 3: Citation Validation — catch hallucinated chunk IDs ──────────
     citation_result = validate_citations(cited_chunk_ids, retrieved_chunks)
@@ -320,6 +319,40 @@ def process_ticket_for_ai_answer(ticket_id: str) -> dict[str, Any]:
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
+def _insert_hitl_attempt(ticket_id: str, result: dict) -> None:
+    """
+    Persists a HITL routing event to the hitl_attempts table.
+    Extracts whatever fields are available in result — earlier stage failures
+    (e.g. weak_retrieval) will have null LLM fields, which is expected.
+
+    Never raises — a logging failure should not block the main pipeline.
+    """
+    try:
+        row = {
+            "ticket_id": ticket_id,
+            "reason": result.get("reason", "unknown"),
+            # LLM fields — only present when Stage 2 was reached
+            "attempted_answer": result.get("raw_answer") or result.get("answer"),
+            "confidence_score": result.get("confidence_score"),
+            # Qdrant retrieval — present whenever Stage 1 ran (even on failure)
+            "retrieved_chunks": result.get("retrieved_chunks") or [],
+            # Citation fields — only present when LLM responded
+            "cited_chunk_ids": result.get("cited_chunk_ids") or [],
+            # Hallucination fields — only present on hallucinated_citation reason
+            "hallucinated_ids": result.get("hallucinated_ids") or [],
+        }
+        supabase.table("hitl_attempts").insert(row).execute()
+        logger.info(
+            f"Ticket {ticket_id}: hitl_attempt recorded "
+            f"(reason={row['reason']}, confidence={row['confidence_score']})"
+        )
+    except Exception as e:
+        logger.error(
+            f"Ticket {ticket_id}: failed to insert hitl_attempt row: {e}",
+            exc_info=True,
+        )
+
+
 def handle_ai_response(ticket_id: str) -> dict[str, Any]:
     """
     Top-level orchestrator: runs the full HITL pipeline and takes action.
@@ -327,8 +360,9 @@ def handle_ai_response(ticket_id: str) -> dict[str, Any]:
     - 'auto_send': calls post_reply() to insert the AI message and dispatch
       the email. The ticket status becomes 'pending' (set inside post_reply).
 
-    - 'hitl': updates the ticket status to 'hitl' in Supabase and stops —
-      the agent dashboard (Day 5) will surface it for human review.
+    - 'hitl': updates the ticket status to 'hitl' in Supabase, inserts a
+      hitl_attempts row capturing all available pipeline diagnostics, and stops —
+      the agent dashboard will surface it for human review.
 
     - 'skip': does nothing (latest message wasn't from a customer).
 
@@ -368,9 +402,14 @@ def handle_ai_response(ticket_id: str) -> dict[str, Any]:
     elif action == "hitl":
         reason = result.get("reason", "unknown")
         logger.info(f"Ticket {ticket_id}: routing to HITL (reason={reason}).")
+
+        # 1. Update ticket status so the dashboard surfaces it
         supabase.table("tickets").update(
             {"status": "hitl"}
         ).eq("id", ticket_id).execute()
+
+        # 2. Persist full diagnostic context for agent review
+        _insert_hitl_attempt(ticket_id, result)
 
     elif action == "skip":
         logger.info(f"Ticket {ticket_id}: skipped — no customer message to answer.")

@@ -74,3 +74,39 @@ async def reply_to_ticket(ticket_id: str, body: ReplyRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{ticket_id}/hitl-attempts")
+async def get_hitl_attempts(ticket_id: str):
+    """
+    Returns the latest hitl_attempts row for a given ticket, or null if none exist.
+
+    Used by the agent HITL dashboard to display AI pipeline diagnostics:
+    - reason: why the pipeline routed to HITL
+    - attempted_answer: the LLM draft (if Stage 2 was reached)
+    - confidence_score: the LLM's self-reported confidence
+    - retrieved_chunks: full Top-5 hybrid search results with scores
+    - cited_chunk_ids: IDs the LLM claimed to cite
+    - hallucinated_ids: IDs that didn't exist in the retrieved set
+    """
+    try:
+        response = (
+            supabase.table("hitl_attempts")
+            .select(
+                "id, ticket_id, reason, attempted_answer, confidence_score, "
+                "retrieved_chunks, cited_chunk_ids, hallucinated_ids, created_at"
+            )
+            .eq("ticket_id", ticket_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not response.data:
+            return {"hitl_attempt": None}
+
+        return {"hitl_attempt": response.data[0]}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

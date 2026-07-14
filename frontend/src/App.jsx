@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import DashboardLayout from './components/DashboardLayout';
 import Tickets from './pages/Tickets';
+import TicketDetail from './pages/TicketDetail';
 import KnowledgeBase from './pages/KnowledgeBase';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
           }
         >
           <Route index element={<Tickets />} />
+          <Route path="tickets/:id" element={<TicketDetail />} />
           <Route path="kb" element={<KnowledgeBase />} />
         </Route>
       </Routes>

@@ -4,7 +4,7 @@ celery_app = Celery(
     "enjay_helpdesk",
     broker="redis://localhost:6380/0",
     backend="redis://localhost:6380/0",
-    include=["services.tasks"],
+    include=["backend.services.tasks"],
 )
 
 celery_app.conf.update(

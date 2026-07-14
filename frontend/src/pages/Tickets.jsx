@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Tickets() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -75,7 +77,17 @@ export default function Tickets() {
             </thead>
             <tbody>
               {tickets.map((ticket) => (
-                <tr key={ticket.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <tr 
+                  key={ticket.id} 
+                  onClick={() => navigate(`/tickets/${ticket.id}`)}
+                  style={{ 
+                    borderBottom: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
                   <td style={{ padding: 'var(--space-sm) var(--space-md)' }}>{ticket.subject}</td>
                   <td style={{ padding: 'var(--space-sm) var(--space-md)' }}>{ticket.customer_email}</td>
                   <td style={{ padding: 'var(--space-sm) var(--space-md)' }}>
