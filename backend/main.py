@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import sentry_sdk
-from backend.routers import tickets, webhooks, kb_articles
+from backend.routers import tickets, webhooks, kb_articles, analytics, approvals
 
 sentry_sdk.init(
     dsn=os.environ['SENTRY_DSN'],
@@ -36,6 +36,8 @@ app.add_middleware(
 app.include_router(tickets.router)
 app.include_router(webhooks.router)
 app.include_router(kb_articles.router)
+app.include_router(analytics.router)
+app.include_router(approvals.router)
 
 @app.get("/health")
 def health_check():

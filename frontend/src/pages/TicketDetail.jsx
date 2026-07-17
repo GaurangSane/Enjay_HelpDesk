@@ -1,32 +1,179 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import SaveToKBModal from '../components/SaveToKBModal';
+import ConfidenceGate from '../components/ConfidenceGate';
+
+/* ── Tiny shared helpers ───────────────────────────────────────────────── */
+
+function StatusBadge({ status }) {
+  const classMap = {
+    open:        'badge-open',
+    pending:     'badge-pending',
+    hitl:        'badge-hitl',
+    ai_resolved: 'badge-ai_resolved',
+    resolved:    'badge-resolved',
+  };
+  return (
+    <span className={`badge ${classMap[status] ?? 'badge-resolved'}`}>
+      {status === 'ai_resolved' ? 'AI Resolved' : status.toUpperCase()}
+    </span>
+  );
+}
+
+function getReasonLabel(reason) {
+  switch (reason) {
+    case 'weak_retrieval':              return 'Weak knowledge match';
+    case 'low_confidence_or_no_citations': return 'Low confidence';
+    case 'hallucinated_citation':       return 'Unverified citation';
+    case 'llm_call_failed':             return 'AI unavailable';
+    default:                            return reason || 'Needs Review';
+  }
+}
+
+/* ── Message bubble ──────────────────────────────────────────────────────── */
+
+function MessageBubble({ msg, ticket, onSaveToKB }) {
+  const isCustomer = msg.sender === 'customer';
+  const isAi       = msg.sender === 'ai';
+
+  const bubbleStyle = {
+    padding:      '10px 14px',
+    borderRadius: 'var(--radius-md)',
+    border:       '1px solid',
+    color:        'var(--text)',
+    ...(isCustomer
+      ? {
+          backgroundColor: 'var(--surface-raised)',
+          borderColor:     'var(--border)',
+        }
+      : isAi
+      ? {
+          backgroundColor: 'rgba(155,126,248,0.12)',
+          borderColor:     'rgba(155,126,248,0.35)',
+        }
+      : {
+          backgroundColor: 'rgba(91,156,246,0.12)',
+          borderColor:     'rgba(91,156,246,0.35)',
+        }),
+  };
+
+  return (
+    <div
+      className="message-bubble-wrap"
+      style={{
+        alignSelf:     isCustomer ? 'flex-start' : 'flex-end',
+        display:       'flex',
+        flexDirection: 'column',
+        gap:           '4px',
+      }}
+    >
+      {/* Bubble */}
+      <div style={bubbleStyle}>
+        {isAi && (
+          <div style={{
+            fontSize:      '10px',
+            color:         'var(--accent-secondary)',
+            fontWeight:    700,
+            marginBottom:  '4px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}>
+            ✦ AI Draft
+          </div>
+        )}
+        <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--text)', lineHeight: 1.55 }}>
+          {msg.content}
+        </p>
+      </div>
+
+      {/* Meta row */}
+      <div style={{
+        display:   'flex',
+        alignItems:'center',
+        gap:       '8px',
+        alignSelf: isCustomer ? 'flex-start' : 'flex-end',
+      }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+          {isCustomer ? 'Customer' : isAi ? 'AI Engine' : 'Agent'}
+          {' · '}
+          {new Date(msg.created_at).toLocaleTimeString(undefined, {
+            hour: '2-digit', minute: '2-digit',
+          })}
+        </span>
+        {msg.sender === 'agent' && (
+          <button
+            type="button"
+            onClick={() => onSaveToKB({ title: `Re: ${ticket.subject}`, content: msg.content })}
+            title="Save this reply to the Knowledge Base"
+            style={{
+              padding:         '2px 8px',
+              fontSize:        '10px',
+              fontWeight:      600,
+              border:          '1px solid var(--border)',
+              borderRadius:    'var(--radius-sm)',
+              backgroundColor: 'transparent',
+              color:           'var(--text-muted)',
+              cursor:          'pointer',
+              whiteSpace:      'nowrap',
+              transition:      'border-color 150ms ease, color 150ms ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent-cleared)';
+              e.currentTarget.style.color       = 'var(--accent-cleared)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.color       = 'var(--text-muted)';
+            }}
+          >
+            📚 Save to KB
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main component ──────────────────────────────────────────────────────── */
 
 export default function TicketDetail() {
-  const { id } = useParams();
+  const { id }   = useParams();
   const navigate = useNavigate();
-  const [ticket, setTicket] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [replyText, setReplyText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState(null);
-  
+
+  const [ticket,      setTicket]      = useState(null);
+  const [messages,    setMessages]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
+  const [replyText,   setReplyText]   = useState('');
+  const [sending,     setSending]     = useState(false);
+  const [sendError,   setSendError]   = useState(null);
+  const [polishing,   setPolishing]   = useState(false);
+  const [polishError, setPolishError] = useState(null);
+
+  // Save-to-KB state
+  const [kbDraft, setKbDraft] = useState(null);
+  const [kbToast, setKbToast] = useState(null);
+
+  const triggerKbToast = (message, type = 'success') => {
+    setKbToast({ message, type });
+    setTimeout(() => setKbToast(null), 4000);
+  };
+
   // HITL state
-  const [hitlAttempt, setHitlAttempt] = useState(null);
-  const [loadingHitl, setLoadingHitl] = useState(false);
+  const [hitlAttempt,  setHitlAttempt]  = useState(null);
+  const [loadingHitl,  setLoadingHitl]  = useState(false);
 
   const fetchHitlAttempt = async () => {
     setLoadingHitl(true);
     try {
-      const response = await fetch(`http://localhost:8000/tickets/${id}/hitl-attempts`);
-      if (response.ok) {
-        const result = await response.json();
+      const res = await fetch(`http://localhost:8000/tickets/${id}/hitl-attempts`);
+      if (res.ok) {
+        const result = await res.json();
         setHitlAttempt(result.hitl_attempt);
       }
     } catch (err) {
-      console.error("Failed to fetch HITL attempt:", err);
+      console.error('Failed to fetch HITL attempt:', err);
     } finally {
       setLoadingHitl(false);
     }
@@ -39,21 +186,17 @@ export default function TicketDetail() {
         .select('*, ticket_messages(*)')
         .eq('id', id)
         .single();
-
       if (supabaseError) throw supabaseError;
 
       setTicket(data);
-      
-      // Sort messages chronologically (oldest first)
-      if (data && data.ticket_messages) {
-        const sorted = [...data.ticket_messages].sort(
-          (a, b) => new Date(a.created_at) - new Date(b.created_at)
+      if (data?.ticket_messages) {
+        setMessages(
+          [...data.ticket_messages].sort(
+            (a, b) => new Date(a.created_at) - new Date(b.created_at)
+          )
         );
-        setMessages(sorted);
       }
-
-      // Fetch HITL attempt if status is hitl
-      if (data && data.status === 'hitl') {
+      if (data?.status === 'hitl') {
         await fetchHitlAttempt();
       } else {
         setHitlAttempt(null);
@@ -65,34 +208,25 @@ export default function TicketDetail() {
     }
   };
 
-  useEffect(() => {
-    fetchTicketDetails();
-  }, [id]);
+  useEffect(() => { fetchTicketDetails(); }, [id]);
+
+  /* ── Handlers ─────────────────────────────────────────────────────── */
 
   const handleSendReply = async (e) => {
     e.preventDefault();
     if (!replyText.trim()) return;
-
     setSending(true);
     setSendError(null);
-
     try {
-      const response = await fetch(`http://localhost:8000/tickets/${id}/reply`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: replyText,
-          sender: 'agent',
-        }),
+      const res = await fetch(`http://localhost:8000/tickets/${id}/reply`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ content: replyText, sender: 'agent' }),
       });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || 'Failed to post reply.');
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to post reply.');
       }
-
       setReplyText('');
       await fetchTicketDetails();
     } catch (err) {
@@ -102,345 +236,304 @@ export default function TicketDetail() {
     }
   };
 
-  const getReasonLabel = (reason) => {
-    switch (reason) {
-      case 'weak_retrieval': return 'Weak knowledge match';
-      case 'low_confidence_or_no_citations': return 'Low confidence';
-      case 'hallucinated_citation': return 'Unverified citation';
-      case 'llm_call_failed': return 'AI unavailable';
-      default: return reason || 'Needs Review';
+  const handlePolishDraft = async () => {
+    if (!replyText.trim()) return;
+    setPolishing(true);
+    setPolishError(null);
+    try {
+      const res = await fetch('http://localhost:8000/tickets/polish', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ draft_text: replyText }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to polish draft.');
+      }
+      const data = await res.json();
+      setReplyText(data.polished_text);
+    } catch (err) {
+      setPolishError(err.message || 'Failed to polish draft.');
+    } finally {
+      setPolishing(false);
     }
   };
 
+  /* ── Loading / error guards ───────────────────────────────────────── */
+
   if (loading) {
-    return <div style={{ padding: 'var(--space-xl)', color: 'var(--text-secondary)' }}>Loading ticket details...</div>;
+    return (
+      <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: 'var(--font-size-sm)' }}>
+        Loading ticket…
+      </div>
+    );
   }
 
   if (error || !ticket) {
     return (
-      <div style={{ padding: 'var(--space-xl)' }}>
-        <button 
+      <div style={{ padding: '24px' }}>
+        <button
           onClick={() => navigate('/')}
-          style={{
-            marginBottom: 'var(--space-md)',
-            padding: 'var(--space-sm) var(--space-md)',
-            cursor: 'pointer',
-            backgroundColor: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-sm)'
-          }}
+          style={backBtnStyle}
+          onMouseEnter={(e) => applyHover(e, true)}
+          onMouseLeave={(e) => applyHover(e, false)}
         >
-          &larr; Back to Tickets
+          ← Back to Tickets
         </button>
-        <div style={{
-          padding: 'var(--space-md)',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid var(--accent-danger)',
-          color: 'var(--accent-danger)',
-          borderRadius: 'var(--radius-sm)'
-        }}>
+        <div className="alert alert-danger" style={{ marginTop: '16px' }} role="alert">
           {error || 'Ticket not found.'}
         </div>
       </div>
     );
   }
 
+  /* ── Main render ──────────────────────────────────────────────────── */
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)', gap: 'var(--space-md)' }}>
-      {/* Header section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: 'var(--space-md)' }}>
-        <div>
-          <button 
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 104px)', gap: '16px' }}>
+
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <div style={{
+        display:       'flex',
+        justifyContent:'space-between',
+        alignItems:    'flex-start',
+        borderBottom:  '1px solid var(--border)',
+        paddingBottom: '16px',
+        gap:           '16px',
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
+          <button
             onClick={() => navigate('/')}
-            style={{
-              marginBottom: 'var(--space-sm)',
-              padding: 'var(--space-xs) var(--space-sm)',
-              cursor: 'pointer',
-              backgroundColor: 'var(--bg-secondary)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: 'var(--font-size-sm)'
-            }}
+            style={backBtnStyle}
+            onMouseEnter={(e) => applyHover(e, true)}
+            onMouseLeave={(e) => applyHover(e, false)}
           >
-            &larr; Back
+            ← Back
           </button>
-          <h2 style={{ color: 'var(--text-primary)' }}>{ticket.subject}</h2>
-          <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)' }}>
-            Customer: {ticket.customer_email}
-          </p>
+
+          {/* Ticket subject in Fraunces */}
+          <h2 className="ticket-subject" style={{ fontSize: 'var(--font-size-xl)', margin: 0 }}>
+            {ticket.subject}
+          </h2>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>
+              {ticket.customer_email}
+            </span>
+            <span
+              className="font-mono"
+              style={{ fontSize: '10px', color: 'var(--text-muted)' }}
+              title="Ticket ID"
+            >
+              #{ticket.id?.substring(0, 8)}
+            </span>
+          </div>
         </div>
 
-        {/* Status Badge */}
-        <span style={{
-          padding: 'var(--space-xs) var(--space-sm)',
-          borderRadius: 'var(--radius-sm)',
-          fontSize: 'var(--font-size-sm)',
-          fontWeight: 'bold',
-          border: '1px solid var(--border-color)',
-          backgroundColor: 
-            ticket.status === 'open' ? 'rgba(59, 130, 246, 0.2)' :
-            ticket.status === 'pending' ? 'rgba(245, 158, 11, 0.2)' :
-            ticket.status === 'hitl' ? 'rgba(239, 68, 68, 0.2)' :
-            'rgba(16, 185, 129, 0.2)',
-          color:
-            ticket.status === 'open' ? 'var(--accent-primary)' :
-            ticket.status === 'pending' ? 'var(--accent-warning)' :
-            ticket.status === 'hitl' ? 'var(--accent-danger)' :
-            'var(--accent-success)'
-        }}>
-          {ticket.status.toUpperCase()}
-        </span>
+        {/* Status badge */}
+        <StatusBadge status={ticket.status} />
       </div>
 
-      {/* Chat Thread */}
+      {/* ── Chat Thread ─────────────────────────────────────────────── */}
       <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: 'var(--space-md)',
-        backgroundColor: 'var(--bg-secondary)',
-        borderRadius: 'var(--radius-md)',
-        border: '1px solid var(--border-color)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-md)'
+        flex:            1,
+        overflowY:       'auto',
+        padding:         '16px',
+        backgroundColor: 'var(--surface)',
+        borderRadius:    'var(--radius-md)',
+        border:          '1px solid var(--border)',
+        boxShadow:       'var(--shadow-card)',
+        display:         'flex',
+        flexDirection:   'column',
+        gap:             '16px',
       }}>
         {messages.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-xl)' }}>
+          <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '32px', fontSize: 'var(--font-size-sm)' }}>
             No messages in this ticket thread yet.
           </div>
         ) : (
-          messages.map((msg) => {
-            const isCustomer = msg.sender === 'customer';
-            const isAi = msg.sender === 'ai';
-
-            return (
-              <div 
-                key={msg.id} 
-                style={{
-                  alignSelf: isCustomer ? 'flex-start' : 'flex-end',
-                  maxWidth: '70%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px'
-                }}
-              >
-                {/* Message Bubble */}
-                <div style={{
-                  padding: 'var(--space-sm) var(--space-md)',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: 
-                    isCustomer ? 'var(--bg-tertiary)' : 
-                    isAi ? 'rgba(139, 92, 246, 0.2)' : // Distinct purple theme for AI
-                    'rgba(59, 130, 246, 0.2)', // Blue theme for Agent
-                  border: `1px solid ${
-                    isCustomer ? 'var(--border-color)' :
-                    isAi ? 'var(--accent-secondary)' :
-                    'var(--accent-primary)'
-                  }`,
-                  color: 'var(--text-primary)'
-                }}>
-                  {/* AI Draft Badge */}
-                  {isAi && (
-                    <div style={{
-                      fontSize: '10px',
-                      color: 'var(--accent-secondary)',
-                      fontWeight: 'bold',
-                      marginBottom: '4px',
-                      textTransform: 'uppercase'
-                    }}>
-                      ✦ AI Draft
-                    </div>
-                  )}
-                  <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</p>
-                </div>
-                
-                {/* Meta details below bubble */}
-                <span style={{ 
-                  fontSize: '10px', 
-                  color: 'var(--text-muted)', 
-                  alignSelf: isCustomer ? 'flex-start' : 'flex-end' 
-                }}>
-                  {isCustomer ? 'Customer' : isAi ? 'AI Engine' : 'Agent'} &bull; {new Date(msg.created_at).toLocaleTimeString()}
-                </span>
-              </div>
-            );
-          })
+          messages.map((msg) => (
+            <MessageBubble
+              key={msg.id}
+              msg={msg}
+              ticket={ticket}
+              onSaveToKB={setKbDraft}
+            />
+          ))
         )}
       </div>
 
-      {/* AI Draft (Needs Review) Panel */}
+      {/* ── AI Draft (Needs Review) Panel ───────────────────────────── */}
       {ticket.status === 'hitl' && (
         <div style={{
-          padding: 'var(--space-md)',
-          backgroundColor: 'rgba(139, 92, 246, 0.05)',
-          border: '1px solid rgba(139, 92, 246, 0.3)',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--space-sm)'
+          padding:         '16px',
+          backgroundColor: 'rgba(155,126,248,0.05)',
+          border:          '1px solid rgba(155,126,248,0.25)',
+          borderRadius:    'var(--radius-md)',
+          display:         'flex',
+          flexDirection:   'column',
+          gap:             '12px',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h4 style={{ color: 'var(--accent-secondary)', display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', margin: 0 }}>
-              ✦ AI Draft (Needs Review)
+          {/* Panel header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <h4 style={{ color: 'var(--accent-secondary)', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+              ✦ AI Draft — Needs Review
             </h4>
             {hitlAttempt && (
-              <span style={{
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: 'var(--font-size-sm)',
-                fontWeight: 'bold',
-                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                color: 'var(--accent-danger)',
-                border: '1px solid var(--accent-danger)'
-              }}>
+              <span className="badge badge-hitl" style={{ fontFamily: 'var(--font-ui)' }}>
                 {getReasonLabel(hitlAttempt.reason)}
               </span>
             )}
           </div>
 
           {loadingHitl ? (
-            <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>Loading AI diagnostics...</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-sm)' }}>
+              Loading AI diagnostics…
+            </div>
           ) : hitlAttempt ? (
             <>
-              {/* Weak Retrieval Warning */}
+              {/* Weak retrieval warning */}
               {hitlAttempt.reason === 'weak_retrieval' && (
-                <div style={{
-                  padding: 'var(--space-sm)',
-                  backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                  border: '1px solid var(--accent-warning)',
-                  color: 'var(--accent-warning)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: 'var(--font-size-sm)'
-                }}>
-                  No relevant knowledge base match found — please answer manually
+                <div className="alert alert-warning" role="alert">
+                  No relevant knowledge base match found — please answer manually.
                 </div>
               )}
 
-              {/* Hallucinated Citation Warning */}
+              {/* Hallucinated citation warning */}
               {hitlAttempt.reason === 'hallucinated_citation' && (
-                <div style={{
-                  padding: 'var(--space-sm)',
-                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid var(--accent-danger)',
-                  color: 'var(--accent-danger)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: 'var(--font-size-sm)',
-                  fontWeight: 'bold'
-                }}>
-                  ⚠ AI cited a source that does not exist in retrieval — treat this answer with extra caution
+                <div className="alert alert-danger" role="alert">
+                  ⚠ AI cited a source that does not exist in retrieval — treat this answer with extra caution.
                 </div>
               )}
 
-              {/* Attempted Answer Box */}
+              {/* Attempted answer */}
               {hitlAttempt.attempted_answer && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{
-                    padding: 'var(--space-md)',
-                    backgroundColor: 'var(--bg-tertiary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    color: 'var(--text-primary)',
-                    whiteSpace: 'pre-wrap',
-                    fontSize: 'var(--font-size-sm)',
-                    lineHeight: '1.5'
+                    padding:         '12px 16px',
+                    backgroundColor: 'var(--surface-raised)',
+                    border:          '1px solid var(--border)',
+                    borderRadius:    'var(--radius-sm)',
+                    color:           'var(--text)',
+                    whiteSpace:      'pre-wrap',
+                    fontSize:        'var(--font-size-sm)',
+                    lineHeight:      1.6,
                   }}>
                     {hitlAttempt.attempted_answer}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      This answer was NOT sent — AI confidence: {hitlAttempt.confidence_score}/10
-                    </span>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    {/* Confidence score with ConfidenceGate */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        AI confidence:
+                      </span>
+                      <ConfidenceGate score={hitlAttempt.confidence_score} size="md" />
+                      <span
+                        className="font-mono"
+                        style={{
+                          fontSize: '11px',
+                          color:    hitlAttempt.confidence_score >= 8
+                            ? 'var(--accent-cleared)'
+                            : 'var(--accent-review)',
+                        }}
+                      >
+                        {hitlAttempt.confidence_score}/10
+                      </span>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => setReplyText(hitlAttempt.attempted_answer)}
                       style={{
-                        padding: 'var(--space-xs) var(--space-sm)',
+                        padding:         '6px 14px',
                         backgroundColor: 'var(--accent-secondary)',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer',
-                        fontSize: 'var(--font-size-sm)',
-                        fontWeight: 'bold'
+                        color:           '#ffffff',
+                        border:          'none',
+                        borderRadius:    'var(--radius-md)',
+                        cursor:          'pointer',
+                        fontSize:        'var(--font-size-sm)',
+                        fontWeight:      600,
+                        transition:      'filter 150ms ease',
                       }}
                     >
-                      Use this draft
+                      Use this draft ↓
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Sources Section */}
-              {hitlAttempt.retrieved_chunks && hitlAttempt.retrieved_chunks.length > 0 && (
-                <div style={{ marginTop: 'var(--space-xs)' }}>
+              {/* Sources */}
+              {hitlAttempt.retrieved_chunks?.length > 0 && (
+                <div>
                   <details style={{
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    backgroundColor: 'var(--bg-tertiary)',
-                    overflow: 'hidden'
+                    border:          '1px solid var(--border)',
+                    borderRadius:    'var(--radius-sm)',
+                    backgroundColor: 'var(--surface-raised)',
+                    overflow:        'hidden',
                   }}>
                     <summary style={{
-                      padding: 'var(--space-sm)',
-                      cursor: 'pointer',
-                      fontSize: 'var(--font-size-sm)',
-                      fontWeight: 'bold',
-                      color: 'var(--text-primary)',
-                      userSelect: 'none',
-                      backgroundColor: 'rgba(255, 255, 255, 0.02)'
+                      padding:         '8px 12px',
+                      fontSize:        'var(--font-size-sm)',
+                      fontWeight:      600,
+                      color:           'var(--text)',
+                      userSelect:      'none',
                     }}>
                       Sources AI considered ({hitlAttempt.retrieved_chunks.length})
                     </summary>
                     <div style={{
-                      padding: 'var(--space-sm)',
-                      display: 'flex',
+                      padding:       '8px',
+                      display:       'flex',
                       flexDirection: 'column',
-                      gap: 'var(--space-sm)',
-                      borderTop: '1px solid var(--border-color)',
-                      maxHeight: '200px',
-                      overflowY: 'auto'
+                      gap:           '8px',
+                      borderTop:     '1px solid var(--border)',
+                      maxHeight:     '200px',
+                      overflowY:     'auto',
                     }}>
                       {hitlAttempt.retrieved_chunks.map((chunk, idx) => (
-                        <details 
+                        <details
                           key={idx}
                           style={{
-                            padding: 'var(--space-xs)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: 'var(--radius-sm)',
-                            backgroundColor: 'var(--bg-secondary)'
+                            padding:         '6px',
+                            border:          '1px solid var(--border)',
+                            borderRadius:    'var(--radius-sm)',
+                            backgroundColor: 'var(--surface)',
                           }}
                         >
                           <summary style={{
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            color: 'var(--text-secondary)',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            listStyle: 'none'
+                            fontSize:      '12px',
+                            color:         'var(--text-muted)',
+                            display:       'flex',
+                            justifyContent:'space-between',
+                            alignItems:    'center',
+                            listStyle:     'none',
                           }}>
-                            <span style={{ display: 'flex', gap: 'var(--space-xs)' }}>
-                              <strong>Source #{idx + 1}</strong>
-                              <span style={{ color: 'var(--text-muted)' }}>
-                                ({chunk.chunk_point_id?.substring(0, 8)}...)
+                            <span style={{ display: 'flex', gap: '6px' }}>
+                              <strong style={{ color: 'var(--text)' }}>Source #{idx + 1}</strong>
+                              <span className="font-mono" style={{ color: 'var(--text-muted)' }}>
+                                ({chunk.chunk_point_id?.substring(0, 8)}…)
                               </span>
                             </span>
-                            <span style={{ 
-                              color: chunk.score > 0.8 ? 'var(--accent-success)' : 'var(--text-muted)',
-                              fontWeight: 'bold'
-                            }}>
-                              Score: {chunk.score?.toFixed(4)}
+                            <span
+                              className="font-mono"
+                              style={{
+                                color:      chunk.score > 0.8 ? 'var(--accent-cleared)' : 'var(--text-muted)',
+                                fontWeight: 600,
+                                fontSize:   '11px',
+                              }}
+                            >
+                              {chunk.score?.toFixed(4)}
                             </span>
                           </summary>
                           <div style={{
-                            marginTop: 'var(--space-xs)',
-                            padding: 'var(--space-xs)',
-                            fontSize: '12px',
-                            color: 'var(--text-primary)',
-                            whiteSpace: 'pre-wrap',
-                            borderTop: '1px dashed var(--border-color)',
-                            backgroundColor: 'var(--bg-tertiary)'
+                            marginTop:       '6px',
+                            padding:         '6px',
+                            fontSize:        '12px',
+                            color:           'var(--text)',
+                            whiteSpace:      'pre-wrap',
+                            borderTop:       '1px dashed var(--border)',
+                            backgroundColor: 'var(--surface-raised)',
+                            borderRadius:    '0 0 var(--radius-sm) var(--radius-sm)',
                           }}>
                             {chunk.content}
                           </div>
@@ -452,59 +545,127 @@ export default function TicketDetail() {
               )}
             </>
           ) : (
-            <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>No AI diagnostics found for this ticket.</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-sm)' }}>
+              No AI diagnostics found for this ticket.
+            </div>
           )}
         </div>
       )}
 
-      {/* Reply Area */}
-      {sendError && (
-        <div style={{
-          padding: 'var(--space-sm)',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid var(--accent-danger)',
-          color: 'var(--accent-danger)',
-          borderRadius: 'var(--radius-sm)',
-          fontSize: 'var(--font-size-sm)'
-        }}>
-          {sendError}
+      {/* ── Error banners ────────────────────────────────────────────── */}
+      {(sendError || polishError) && (
+        <div className="alert alert-danger" role="alert">
+          {sendError || polishError}
         </div>
       )}
 
-      <form onSubmit={handleSendReply} style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+      {/* ── Reply Area ───────────────────────────────────────────────── */}
+      <form onSubmit={handleSendReply} className="reply-form">
         <textarea
-          rows="3"
+          id="reply-textarea"
+          rows={3}
           value={replyText}
-          onChange={(e) => setReplyText(e.target.value)}
-          placeholder="Type your response to the customer..."
+          onChange={(e) => { setReplyText(e.target.value); setSendError(null); setPolishError(null); }}
+          placeholder="Type your response to the customer…"
+          aria-label="Reply message"
           style={{
-            flex: 1,
-            padding: 'var(--space-sm)',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--border-color)',
-            backgroundColor: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            outline: 'none',
-            resize: 'none'
+            flex:            1,
+            padding:         '10px 12px',
+            borderRadius:    'var(--radius-md)',
+            border:          '1px solid var(--border)',
+            backgroundColor: 'var(--surface)',
+            color:           'var(--text)',
+            resize:          'none',
+            fontSize:        'var(--font-size-sm)',
+            lineHeight:      1.5,
+            minHeight:       '80px',
           }}
         />
-        <button
-          type="submit"
-          disabled={sending || !replyText.trim()}
+        <div className="reply-form__actions">
+          <button
+            id="polish-draft-btn"
+            type="button"
+            onClick={handlePolishDraft}
+            disabled={polishing || !replyText.trim()}
+            title="Polish grammar, tone, and formatting — no new facts added"
+            className="reply-form__btn"
+            style={{
+              border:          '1px solid var(--accent-secondary)',
+              backgroundColor: 'rgba(155,126,248,0.1)',
+              color:           'var(--accent-secondary)',
+            }}
+          >
+            {polishing ? '✨ Polishing…' : '✨ Polish Draft'}
+          </button>
+          <button
+            id="send-reply-btn"
+            type="submit"
+            disabled={sending || !replyText.trim()}
+            className="reply-form__btn"
+            style={{
+              border:          'none',
+              backgroundColor: 'var(--accent-primary)',
+              color:           '#ffffff',
+            }}
+          >
+            {sending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+      </form>
+
+      {/* ── KB Toast ─────────────────────────────────────────────────── */}
+      {kbToast && (
+        <div
+          role="status"
+          aria-live="polite"
           style={{
-            padding: '0 var(--space-lg)',
-            borderRadius: 'var(--radius-sm)',
-            border: 'none',
-            backgroundColor: 'var(--accent-primary)',
-            color: '#ffffff',
-            fontWeight: 'bold',
-            cursor: replyText.trim() ? 'pointer' : 'not-allowed',
-            opacity: replyText.trim() ? 1 : 0.6
+            position:        'fixed',
+            bottom:          '24px',
+            right:           '24px',
+            padding:         '12px 20px',
+            backgroundColor: kbToast.type === 'success' ? 'var(--accent-cleared)' : 'var(--accent-danger)',
+            color:           '#fff',
+            borderRadius:    'var(--radius-md)',
+            boxShadow:       'var(--shadow-raised)',
+            zIndex:          1100,
+            fontWeight:      600,
+            fontSize:        'var(--font-size-sm)',
           }}
         >
-          {sending ? 'Sending...' : 'Send'}
-        </button>
-      </form>
+          {kbToast.message}
+        </div>
+      )}
+
+      {/* ── Save-to-KB Modal ──────────────────────────────────────────── */}
+      {kbDraft && (
+        <SaveToKBModal
+          initialTitle={kbDraft.title}
+          initialContent={kbDraft.content}
+          onClose={() => setKbDraft(null)}
+          onSaved={(msg) => { setKbDraft(null); triggerKbToast(msg); }}
+        />
+      )}
     </div>
   );
+}
+
+/* ── Shared button style helpers ─────────────────────────────────────────── */
+const backBtnStyle = {
+  display:         'inline-flex',
+  alignItems:      'center',
+  gap:             '4px',
+  padding:         '4px 10px',
+  cursor:          'pointer',
+  backgroundColor: 'transparent',
+  color:           'var(--text-muted)',
+  border:          '1px solid var(--border)',
+  borderRadius:    'var(--radius-sm)',
+  fontSize:        'var(--font-size-sm)',
+  transition:      'border-color 150ms ease, color 150ms ease',
+  width:           'fit-content',
+};
+
+function applyHover(e, enter) {
+  e.currentTarget.style.borderColor = enter ? 'var(--accent-primary)' : 'var(--border)';
+  e.currentTarget.style.color       = enter ? 'var(--text)'           : 'var(--text-muted)';
 }

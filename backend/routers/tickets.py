@@ -1,6 +1,8 @@
+import os
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, field_validator
+from groq import Groq
 
 from backend.services.reply_service import post_reply
 
@@ -42,13 +44,74 @@ class ReplyResponse(BaseModel):
     email_error: str | None = None
 
 
+class PolishRequest(BaseModel):
+    draft_text: str
+
+    @field_validator("draft_text")
+    @classmethod
+    def validate_draft(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("draft_text must not be empty")
+        return v.strip()
+
+
+class PolishResponse(BaseModel):
+    polished_text: str
+
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+
+async def get_current_user(authorization: str = Header(None)) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization header missing or invalid format."
+        )
+    
+    token = authorization.split(" ")[1]
+    
+    try:
+        auth_response = supabase.auth.get_user(token)
+        if not auth_response or not auth_response.user:
+            raise HTTPException(status_code=401, detail="Invalid session token.")
+        user = auth_response.user
+    except Exception as e:
+        logger.error(f"Supabase auth validation failed: {e}")
+        raise HTTPException(status_code=401, detail="Unauthorized session.")
+
+    try:
+        role_resp = (
+            supabase.table("user_roles")
+            .select("role")
+            .eq("user_id", user.id)
+            .execute()
+        )
+        if not role_resp.data:
+            raise HTTPException(status_code=403, detail="Forbidden: User role not assigned.")
+        
+        user_role = role_resp.data[0].get("role")
+        return {"id": user.id, "email": user.email, "role": user_role}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking user role: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error checking user role.")
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/")
-async def get_tickets():
-    """Returns all tickets (service_role bypasses RLS — admin use only)."""
+async def get_tickets(status: str | None = None, user: dict = Depends(get_current_user)):
+    """Returns tickets, optionally filtered by status. Agents see only their assigned tickets, Admins see all."""
     try:
-        response = supabase.table("tickets").select("*").execute()
+        query = supabase.table("tickets").select("*")
+        if status:
+            query = query.eq("status", status)
+            
+        if user["role"] == "agent":
+            query = query.eq("assigned_to", user["id"])
+            
+        response = query.execute()
         return response.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -109,4 +172,49 @@ async def get_hitl_attempts(ticket_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/polish", response_model=PolishResponse)
+async def polish_draft(body: PolishRequest):
+    """
+    Polishes an agent's manual reply draft for grammar, tone, and email formatting.
+    Does not invent new technical information.
+    """
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        logger.error("GROQ_API_KEY is not set — cannot polish draft.")
+        raise HTTPException(status_code=500, detail="LLM configuration missing.")
+
+    system_prompt = (
+        "You are an expert technical editor. Your job is to polish a draft support email written by an agent.\n\n"
+        "RULES:\n"
+        "1. Fix all grammar, spelling, and punctuation mistakes.\n"
+        "2. Improve clarity and ensure a professional, helpful tone.\n"
+        "3. Format it as a proper support email:\n"
+        "   - Add a warm greeting (e.g., 'Hi there,') if one is missing.\n"
+        "   - Use clear paragraph breaks.\n"
+        "   - If steps are involved, format them as a numbered or bulleted list.\n"
+        "   - Add a professional sign-off (e.g., 'Best regards,\\nEnjay Helpdesk Support Team') if missing.\n"
+        "4. CRITICAL: Do NOT add any new technical claims, facts, steps, or information that wasn't in the original draft. This is a tone and formatting pass only.\n"
+        "5. Return ONLY the polished text. Do not include preamble, explanations, or quotes."
+    )
+
+    try:
+        client = Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Draft to polish:\n\n{body.draft_text}"},
+            ],
+            temperature=0.3,
+            max_tokens=1024,
+        )
+
+        polished_text = response.choices[0].message.content.strip()
+        return PolishResponse(polished_text=polished_text)
+
+    except Exception as e:
+        logger.error(f"Failed to polish draft: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to polish draft.")
 

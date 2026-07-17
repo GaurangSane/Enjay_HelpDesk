@@ -46,8 +46,8 @@ def send_reply_email(to: str, subject: str, content: str) -> tuple[bool, str | N
 
     try:
         response = resend.Emails.send({
-            "from": os.getenv("RESEND_FROM_EMAIL", "support@yourdomain.com"),
-            "reply_to": "helpdesk@venutenup.resend.app",
+            "from": os.getenv("RESEND_FROM_EMAIL", os.getenv("SUPPORT_EMAIL_ADDRESS", "support@yourdomain.com")),
+            "reply_to": os.getenv("SUPPORT_EMAIL_ADDRESS", "support@yourdomain.com"),
             "to": [to],
             "subject": subject,
             "html": html_body,

@@ -1,0 +1,462 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   responsive.css — Enjay Helpdesk Responsive System
+   ───────────────────────────────────────────────────────────────────────
+   Breakpoints (defined once, referenced everywhere):
+     --bp-mobile  : 768px   → phones / small tablets
+     --bp-desktop : 1024px  → tablet ↔ desktop transition (sidebar)
+
+   Strategy:
+     • Mobile-first base → @media (min-width) for progressively larger layouts
+     • CSS custom properties cannot be used inside @media, so we document them
+       here as comments and reference the same px values consistently
+     • Layout classes (.layout-sidebar, .layout-main, etc.) are applied to
+       DashboardLayout and control the sidebar/hamburger split
+     • Content classes (.ticket-table-wrap, .ticket-card-list, .reply-form)
+       handle per-page responsive behaviour
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Sidebar / Hamburger Layout ─────────────────────────────────────── */
+
+/* Hamburger toggle — only rendered on mobile */
+.hamburger-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 150ms ease;
+}
+
+.hamburger-btn:hover {
+  background-color: var(--surface-raised);
+}
+
+/* Drawer overlay backdrop */
+.drawer-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 200;
+  /* no transition — instant on open, animated close handled by drawer itself */
+}
+
+.drawer-backdrop.is-open {
+  display: block;
+}
+
+/* Sidebar itself */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background-color: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  /* On desktop: static in flow */
+  position: relative;
+  z-index: auto;
+}
+
+/* Drawer close button (hidden on desktop) */
+.drawer-close-btn {
+  display: none;
+}
+
+/* ── Mobile: sidebar becomes a fixed drawer ─────────────────────────── */
+@media (max-width: 1023px) {
+  .hamburger-btn {
+    display: flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 260px;
+    z-index: 300;
+    transform: translateX(-100%);
+    transition: transform 150ms ease;
+    overflow-y: auto;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+    /* Still rendered in DOM, just off-screen */
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .drawer-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    align-self: flex-end;
+    flex-shrink: 0;
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+
+  .drawer-close-btn:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+}
+
+/* ── 2. Topbar ──────────────────────────────────────────────────────────── */
+.topbar {
+  height: 56px;
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+@media (max-width: 767px) {
+  .topbar {
+    padding: 0 16px;
+    height: 52px;
+  }
+}
+
+/* ── 3. Ticket Table → Card layout ─────────────────────────────────────── */
+
+/* Table wrapper — clips horizontal overflow on small screens */
+.ticket-table-wrap {
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+/* The native <table> — visible on desktop */
+.ticket-table {
+  display: table;
+  width: 100%;
+}
+
+/* Card list — hidden on desktop, shown on mobile */
+.ticket-card-list {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .ticket-table {
+    display: none;
+  }
+
+  .ticket-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+}
+
+/* Individual ticket card (mobile) */
+.ticket-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.ticket-card:last-child {
+  border-bottom: none;
+}
+
+.ticket-card:hover,
+.ticket-card:focus-visible {
+  background-color: var(--surface-raised);
+}
+
+.ticket-card:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+.ticket-card__subject {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--text);
+  /* Truncate very long subjects */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ticket-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ticket-card__email {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  /* Truncate long emails */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.ticket-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.ticket-card__time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ── 4. Tab bar ─────────────────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar while still scrollable */
+  scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── 5. Ticket Detail — reply form ──────────────────────────────────────── */
+
+/* Desktop: side-by-side textarea + button column */
+.reply-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.reply-form__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.reply-form__btn {
+  height: 40px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 0 16px;
+  transition: filter 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+/* Mobile: stack textarea above full-width buttons */
+@media (max-width: 767px) {
+  .reply-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reply-form__actions {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .reply-form__btn {
+    flex: 1;
+    height: 48px; /* ≥44px touch target */
+  }
+}
+
+/* Bubble max-width adjustment */
+.message-bubble-wrap {
+  max-width: 68%;
+}
+
+@media (max-width: 767px) {
+  .message-bubble-wrap {
+    max-width: 85%;
+  }
+}
+
+/* ── 6. Forms — Login / SignUp ──────────────────────────────────────────── */
+
+.auth-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 24px 16px;
+  background-color: var(--bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 32px;
+  background-color: var(--surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
+@media (max-width: 767px) {
+  .auth-card {
+    padding: 24px 20px;
+    border-radius: var(--radius-md);
+  }
+}
+
+/* Full-width inputs on all screen sizes — explicit for clarity */
+.auth-input {
+  width: 100%;
+  padding: 12px 14px;        /* ≥44px effective height with line-height */
+  min-height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background-color: var(--surface-raised);
+  color: var(--text);
+  font-size: var(--font-size-base);
+  font-family: var(--font-ui);
+  box-sizing: border-box;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(91, 156, 246, 0.18);
+}
+
+.auth-submit-btn {
+  width: 100%;
+  min-height: 48px;          /* ≥44px tap target */
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: none;
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 150ms ease;
+}
+
+.auth-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-submit-btn:not(:disabled):hover {
+  filter: brightness(1.12);
+}
+
+/* ── 7. SaveToKBModal — button row ──────────────────────────────────────── */
+.modal-btn-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 767px) {
+  .modal-btn-row {
+    flex-direction: column-reverse;
+  }
+
+  .modal-btn-row button {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+  }
+}
+
+/* ── 8. Analytics grid ──────────────────────────────────────────────────── */
+
+/* Stat cards — already use auto-fit minmax, this ensures minimum on mobile */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+@media (max-width: 767px) {
+  .analytics-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 479px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+@media (max-width: 767px) {
+  .charts-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* ── 9. Page-level padding adjustment ───────────────────────────────────── */
+.main-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+@media (max-width: 767px) {
+  .main-content {
+    padding: 16px;
+  }
+}
+
+/* ── 10. General utility: truncate text ─────────────────────────────────── */
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -18,6 +18,7 @@ the HITL dashboard — never sends the email itself.
 import os
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from groq import Groq
@@ -37,8 +38,6 @@ PREFETCH_LIMIT = 20
 VECTOR_SCORE_THRESHOLD = 0.75   # Stage 1 gate
 LLM_CONFIDENCE_THRESHOLD = 8    # Stage 2 gate (out of 10)
 
-# ── System prompt ─────────────────────────────────────────────────────────────
-
 _SYSTEM_PROMPT = """You are a technical support assistant for enterprise software.
 
 STRICT RULES — read carefully and follow exactly:
@@ -48,10 +47,18 @@ STRICT RULES — read carefully and follow exactly:
 4. Do NOT inflate your confidence_score. If you are even slightly uncertain, score it honestly — agents will review low-confidence responses. Defaulting to a high number is a critical failure.
 5. cited_chunk_ids MUST only contain IDs that appear verbatim in the provided chunks. Never invent chunk IDs.
 6. cited_chunk_ids MUST NOT be empty if you provide an answer.
+7. You MUST write and format the content of the 'answer' field specifically as a professional, well-formatted support email following these rules:
+   - Start with a warm, professional greeting at the very beginning: use "Hi {customer_name}," using the actual customer name provided in the user context, or a generic "Hi there," if the name is 'there' or unavailable.
+   - Use a helpful, human, and conversational tone that isn't robotic or overly formal.
+   - Include clear paragraph breaks (using double newlines `\\n\\n`) between distinct points, thoughts, or steps to avoid a single dense block of text.
+   - If the answer involves steps or instructions, format them clearly as a numbered or bulleted list to maximize readability.
+   - End the message with the exact professional sign-off:
+     Best regards,
+     Enjay Helpdesk Support Team
 
-OUTPUT FORMAT: Respond ONLY with a valid JSON object and nothing else:
+OUTPUT FORMAT: Respond ONLY with a valid JSON object and nothing else. Do not change the JSON structure:
 {
-  "answer": "<your full reply to the customer, in plain professional text>",
+  "answer": "<your full reply to the customer, formatted as a professional email with the greeting containing their name, paragraph breaks, list formatting, and the required sign-off>",
   "confidence_score": <integer from 1 to 10>,
   "cited_chunk_ids": ["<chunk_point_id_1>", "<chunk_point_id_2>"]
 }"""
@@ -97,6 +104,27 @@ def _run_hybrid_search(query: str) -> list[dict]:
     ]
 
 
+def get_friendly_name(email: str | None) -> str:
+    """
+    Extracts a friendly first name from a customer email address.
+    e.g., 'john.smith@gmail.com' -> 'John'
+          'jane_doe@company.com' -> 'Jane'
+          'info@company.com' -> 'Info'
+          '12345@domain.com' -> 'there' (fallback for purely numeric usernames)
+    """
+    if not email or "@" not in email:
+        return "there"
+    username = email.split("@")[0].split("+")[0]
+    parts = [
+        p.capitalize()
+        for p in username.replace(".", " ").replace("-", " ").replace("_", " ").split()
+        if p
+    ]
+    if parts and not parts[0].isdigit():
+        return parts[0]
+    return "there"
+
+
 def _build_context_block(chunks: list[dict]) -> str:
     """Formats retrieved chunks into a numbered context block for the LLM prompt."""
     lines = []
@@ -107,7 +135,7 @@ def _build_context_block(chunks: list[dict]) -> str:
     return "\n\n---\n\n".join(lines)
 
 
-def _call_llm(query: str, chunks: list[dict]) -> dict[str, Any] | None:
+def _call_llm(query: str, chunks: list[dict], customer_name: str) -> dict[str, Any] | None:
     """
     Calls Groq with a strict system prompt and the retrieved context.
     Returns the parsed JSON dict, or None on API failure / parse error.
@@ -120,6 +148,7 @@ def _call_llm(query: str, chunks: list[dict]) -> dict[str, Any] | None:
     context_block = _build_context_block(chunks)
 
     user_message = (
+        f"Customer Name: {customer_name}\n"
         f"Customer query: {query}\n\n"
         f"Support knowledge base chunks to answer from:\n\n"
         f"{context_block}"
@@ -253,7 +282,25 @@ def process_ticket_for_ai_answer(ticket_id: str) -> dict[str, Any]:
 
     # ── Stage 2: LLM Confidence Gate ─────────────────────────────────────────
     logger.info(f"Ticket {ticket_id}: Stage 1 passed. Calling LLM...")
-    llm_response = _call_llm(query, retrieved_chunks)
+    
+    # Resolve customer email & name from ticket to personalize the greeting
+    customer_email = None
+    try:
+        ticket_resp = (
+            supabase.table("tickets")
+            .select("customer_email")
+            .eq("id", ticket_id)
+            .single()
+            .execute()
+        )
+        if ticket_resp.data:
+            customer_email = ticket_resp.data.get("customer_email")
+    except Exception as e:
+        logger.error(f"Failed to fetch ticket customer_email for ticket_id={ticket_id}: {e}")
+
+    customer_name = get_friendly_name(customer_email)
+
+    llm_response = _call_llm(query, retrieved_chunks, customer_name)
 
     if llm_response is None:
         return {
@@ -390,6 +437,36 @@ def handle_ai_response(ticket_id: str) -> dict[str, Any]:
                 f"message_id={reply_result['message_id']} | "
                 f"email_sent={reply_result['email_sent']}"
             )
+
+            # ── Mark ticket as AI-resolved (only on successful post_reply) ────
+            # post_reply() sets status='pending' internally before dispatching the
+            # email. We now override that to 'ai_resolved' to distinguish tickets
+            # that were fully closed by the AI from those awaiting agent action.
+            # This update only runs if post_reply() returned without raising —
+            # meaning the ticket_messages row was inserted successfully.
+            try:
+                supabase.table("tickets").update({
+                    "status": "ai_resolved",
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("id", ticket_id).execute()
+                logger.info(f"Ticket {ticket_id}: status set to 'ai_resolved'.")
+            except Exception as status_exc:
+                # Non-fatal: the reply was sent; status update failure is cosmetic.
+                # The ticket will remain 'pending' (set by post_reply) and will be
+                # visible in the dashboard for manual resolution.
+                logger.error(
+                    f"Ticket {ticket_id}: AI reply sent but failed to set status='ai_resolved': "
+                    f"{status_exc}",
+                    exc_info=True,
+                )
+
+            if not reply_result.get("email_sent"):
+                logger.warning(
+                    f"Ticket {ticket_id}: AI reply DB row saved (ai_resolved) "
+                    f"but Resend email dispatch failed: {reply_result.get('email_error')}. "
+                    f"Customer will not receive the email — agent may need to follow up."
+                )
+
         except Exception as e:
             logger.error(
                 f"Ticket {ticket_id}: post_reply() failed after auto_send gate passed: {e}",

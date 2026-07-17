@@ -205,3 +205,134 @@ def sync_kb_article_task(self, kb_article_id: str):
         # Leave sync_status = 'pending' — sweeper cron will retry
         logger.error(f"sync_kb_article_task failed for {kb_article_id}: {exc}", exc_info=True)
         raise self.retry(exc=exc)
+
+
+# ---------------------------------------------------------------------------
+# Task 3: Trigger AI response pipeline for a new customer message
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    name="services.tasks.trigger_ai_response_task",
+    bind=True,
+    max_retries=0,         # No retries — handle_ai_response is not idempotent by design.
+    acks_late=True,        # Ack only after the task body completes (safer with Redis).
+)
+def trigger_ai_response_task(self, ticket_id: str, ticket_message_id: str):
+    """
+    Orchestrates the full HITL AI pipeline for a single customer message.
+
+    Idempotency guard:
+        Checks ticket_messages.ai_processed before doing anything.
+        If already True, the message was processed in a previous Celery execution
+        (Resend/Svix may retry webhooks). Logs a warning and returns immediately.
+        Sets ai_processed=True immediately after the guard passes, before any LLM
+        call, so concurrent retries can't slip through a race window.
+
+    Success paths (handled inside handle_ai_response):
+        - 'auto_send': AI answer is posted as a ticket_messages row + email sent.
+        - 'hitl':      Ticket routed to human; hitl_attempts row inserted.
+        - 'skip':      Latest message not from customer; nothing done.
+
+    Failure path:
+        Any unhandled exception is caught, logged (Sentry captures via its Celery
+        integration), and the ticket is set to status='hitl' so a human sees it.
+        This prevents tickets from being silently stuck in 'open' forever.
+
+    Note: max_retries=0 because:
+        - The idempotency guard makes retries safe, but handle_ai_response already
+          has internal error handling and sets hitl on failure.
+        - LLM quota errors (429) should surface immediately rather than pile up.
+    """
+    # Lazy import to avoid circular dependency at module load:
+    # tasks.py is imported by celery_app before hitl_gate is fully initialised.
+    from backend.services.hitl_gate import handle_ai_response
+
+    logger.info(
+        f"trigger_ai_response_task: START | ticket={ticket_id} | message={ticket_message_id}"
+    )
+
+    # ── Idempotency guard ─────────────────────────────────────────────────────
+    # Re-fetch the row every time — cheap, safe, and prevents duplicate processing
+    # caused by Resend/Svix webhook retries on transient HTTP errors.
+    try:
+        guard_resp = (
+            supabase.table("ticket_messages")
+            .select("ai_processed")
+            .eq("id", ticket_message_id)
+            .single()
+            .execute()
+        )
+    except Exception as e:
+        logger.error(
+            f"trigger_ai_response_task: DB read for idempotency guard failed "
+            f"(ticket={ticket_id}, message={ticket_message_id}): {e}",
+            exc_info=True,
+        )
+        # Can't confirm idempotency — bail out safely rather than risk double-processing.
+        return {"status": "skipped", "reason": "guard_read_failed"}
+
+    if not guard_resp.data:
+        logger.error(
+            f"trigger_ai_response_task: ticket_message {ticket_message_id} not found. "
+            f"Possibly deleted or wrong ID. Skipping."
+        )
+        return {"status": "skipped", "reason": "message_not_found"}
+
+    if guard_resp.data.get("ai_processed"):
+        logger.warning(
+            f"trigger_ai_response_task: ticket_message {ticket_message_id} already processed "
+            f"(ai_processed=True). Skipping — likely a webhook retry. ticket={ticket_id}"
+        )
+        return {"status": "skipped", "reason": "already_processed"}
+
+    # ── Mark processed immediately (before LLM call) ──────────────────────────
+    # This narrow window (read → write) is safe: Celery workers are single-threaded
+    # per task, and Supabase writes are atomic. A concurrent retry that reads
+    # ai_processed=False before this write is a theoretical risk only if two Celery
+    # workers pick up the same task within milliseconds — prevented by acks_late=True.
+    try:
+        supabase.table("ticket_messages").update(
+            {"ai_processed": True}
+        ).eq("id", ticket_message_id).execute()
+    except Exception as e:
+        logger.error(
+            f"trigger_ai_response_task: failed to set ai_processed=True for "
+            f"message={ticket_message_id}: {e}. Aborting to prevent duplicate processing.",
+            exc_info=True,
+        )
+        return {"status": "skipped", "reason": "guard_write_failed"}
+
+    # ── Run the HITL pipeline ─────────────────────────────────────────────────
+    try:
+        result = handle_ai_response(ticket_id)
+        action = result.get("action", "unknown")
+        logger.info(
+            f"trigger_ai_response_task: DONE | ticket={ticket_id} | "
+            f"message={ticket_message_id} | action={action}"
+        )
+        return {"status": "success", "action": action}
+
+    except Exception as exc:
+        # ── Fallback: set ticket to 'hitl' so a human sees it ────────────────
+        # This runs when handle_ai_response itself raises (e.g. Groq API down,
+        # Qdrant unreachable, or any other unexpected error not caught internally).
+        logger.error(
+            f"trigger_ai_response_task: handle_ai_response raised unexpectedly for "
+            f"ticket={ticket_id} | message={ticket_message_id}: {exc}",
+            exc_info=True,  # Sentry captures this via its Celery integration
+        )
+        try:
+            supabase.table("tickets").update(
+                {"status": "hitl"}
+            ).eq("id", ticket_id).execute()
+            logger.info(
+                f"trigger_ai_response_task: fallback applied — ticket={ticket_id} "
+                f"set to status='hitl' after unhandled exception."
+            )
+        except Exception as db_exc:
+            logger.error(
+                f"trigger_ai_response_task: CRITICAL — could not set hitl fallback "
+                f"for ticket={ticket_id}: {db_exc}",
+                exc_info=True,
+            )
+        return {"status": "error", "exception": str(exc)}
