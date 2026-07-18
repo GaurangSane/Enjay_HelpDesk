@@ -6,6 +6,7 @@ from email.utils import parseaddr
 from fastapi import APIRouter, Request, HTTPException
 from svix.webhooks import Webhook, WebhookVerificationError
 from bs4 import BeautifulSoup
+from groq import Groq
 from backend.db.supabase_client import supabase
 from backend.services.tasks import sync_ticket_message_task, trigger_ai_response_task
 
@@ -82,6 +83,66 @@ def extract_plain_text(html: str) -> str:
     """Strip HTML tags and return clean plain text using BeautifulSoup."""
     soup = BeautifulSoup(html, "html.parser")
     return soup.get_text(separator="\n", strip=True)
+
+
+async def classify_customer_message(message: str) -> str:
+    """
+    Uses Groq (cheap, fast LLM call) to classify a customer's reply into one
+    of two categories:
+
+        'closing_remark'  — a thank-you, acknowledgment, or conversation-ending
+                            message that contains no new question or issue.
+                            Examples: "ok thanks", "got it, works now", "appreciated".
+
+        'new_query'       — contains an actual question, problem, complaint, or
+                            follow-up that requires a substantive response.
+
+    Returns the single classification word (lower-cased, stripped).
+    Defaults to 'new_query' on any error so the pipeline always runs safely.
+
+    This call is intentionally cheap:
+        - Short, stateless system prompt
+        - max_tokens=5 (one word is all we need)
+        - llama-3.1-8b-instant for minimal latency
+    """
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        logger.warning("[CLASSIFY] GROQ_API_KEY not set — defaulting to 'new_query'.")
+        return "new_query"
+
+    system_prompt = (
+        "You are a message classifier for a customer support system. "
+        "Classify the customer's message as exactly one of these two labels:\n\n"
+        "  closing_remark — a thank-you, acknowledgment, confirmation that the issue "
+        "is resolved, or any conversation-ending pleasantry with no new question or problem.\n"
+        "  new_query — contains a new question, problem, complaint, request, or follow-up "
+        "that requires a substantive response from support.\n\n"
+        "Reply with ONLY the single label word. No punctuation, no explanation."
+    )
+
+    try:
+        client = Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": message[:500]},  # cap at 500 chars — cheap call
+            ],
+            temperature=0.0,
+            max_tokens=5,
+        )
+        raw = response.choices[0].message.content.strip().lower()
+        # Accept the label even if the model adds minor punctuation or surrounding text
+        if "closing_remark" in raw:
+            return "closing_remark"
+        if "new_query" in raw:
+            return "new_query"
+        # Unexpected output — log and default to safe path
+        logger.warning(f"[CLASSIFY] Unexpected classification output: {raw!r} — defaulting to 'new_query'.")
+        return "new_query"
+    except Exception as e:
+        logger.error(f"[CLASSIFY] Groq classification call failed: {e} — defaulting to 'new_query'.", exc_info=True)
+        return "new_query"
 
 
 async def fetch_email_body(email_id: str) -> tuple[str, dict]:
@@ -308,11 +369,21 @@ async def resend_webhook(request: Request):
 
     # ── Step 7: Route to existing thread or create new ticket ─────────────────
     if matched_ticket_id:
-        # Thread exists — append new customer message, then conditionally
-        # re-surface the ticket based on its current status:
+        # Thread exists — append new customer message, then:
         #
-        #   pending / ai_resolved / resolved  →  reset to 'open' (needs fresh attention)
-        #   open / hitl                        →  leave as-is (already awaiting action)
+        # ① Classify the message (cheap Groq call, ~100 ms) to decide whether
+        #   it is a closing remark ("thanks, it worked") or a new_query.
+        #
+        # ② closing_remark path:
+        #   - Persist the message for record-keeping.
+        #   - Set ticket status to 'resolved' (customer confirmed issue is closed).
+        #   - Skip AI pipeline — no response needed.
+        #
+        # ③ new_query path:
+        #   - Status logic (same as before):
+        #       pending / ai_resolved / resolved → reset to 'open'
+        #       open / hitl                      → leave as-is
+        #   - Queue AI pipeline as normal.
         #
         # We re-fetch the current status because it may have changed between the
         # match query above and the update below (narrow but real race window).
@@ -325,35 +396,59 @@ async def resend_webhook(request: Request):
         )
         current_status = (current_status_resp.data or {}).get("status", "open")
 
+        # ── ① Fast classification ─────────────────────────────────────────────
+        classification = await classify_customer_message(body)
+        logger.info(
+            f"[INBOUND] Ticket {matched_ticket_id}: message classified as {classification!r} "
+            f"(current_status={current_status!r})"
+        )
+
+        # Always persist the customer message (even for closing remarks — good audit trail)
         insert_response = supabase.table("ticket_messages").insert({
             "ticket_id": matched_ticket_id,
             "sender": "customer",
             "content": body,
         }).execute()
 
-        REOPEN_STATUSES = {"pending", "ai_resolved", "resolved"}
-        if current_status in REOPEN_STATUSES:
-            supabase.table("tickets").update({"status": "open"}).eq("id", matched_ticket_id).execute()
-            logger.info(
-                f"[INBOUND] Ticket {matched_ticket_id}: status '{current_status}' → 'open' "
-                f"(customer reply received)."
-            )
-        else:
-            logger.info(
-                f"[INBOUND] Ticket {matched_ticket_id}: status '{current_status}' left unchanged "
-                f"(already awaiting action)."
-            )
-
         ticket_id = matched_ticket_id
 
-        if insert_response.data:
-            new_message_id = insert_response.data[0]["id"]
-            sync_ticket_message_task.delay(new_message_id)
-            trigger_ai_response_task.delay(ticket_id, new_message_id)
+        if classification == "closing_remark":
+            # ── ② Closing remark: resolve ticket, skip AI ─────────────────────
+            supabase.table("tickets").update(
+                {"status": "resolved"}
+            ).eq("id", matched_ticket_id).execute()
+            logger.info(
+                f"[INBOUND] Ticket {matched_ticket_id}: closing remark detected — "
+                f"status set to 'resolved', AI pipeline skipped."
+            )
+            # Still sync the message into the vector index for future KB searches
+            if insert_response.data:
+                new_message_id = insert_response.data[0]["id"]
+                sync_ticket_message_task.delay(new_message_id)
+
+        else:
+            # ── ③ new_query: reopen if needed and run AI pipeline ─────────────
+            REOPEN_STATUSES = {"pending", "ai_resolved", "resolved"}
+            if current_status in REOPEN_STATUSES:
+                supabase.table("tickets").update({"status": "open"}).eq("id", matched_ticket_id).execute()
+                logger.info(
+                    f"[INBOUND] Ticket {matched_ticket_id}: status '{current_status}' → 'open' "
+                    f"(new customer query received)."
+                )
+            else:
+                logger.info(
+                    f"[INBOUND] Ticket {matched_ticket_id}: status '{current_status}' left unchanged "
+                    f"(already awaiting action)."
+                )
+
+            if insert_response.data:
+                new_message_id = insert_response.data[0]["id"]
+                sync_ticket_message_task.delay(new_message_id)
+                trigger_ai_response_task.delay(ticket_id, new_message_id)
 
         logger.info(
             f"[INBOUND] Appended to existing ticket {ticket_id} "
-            f"(match_method={match_method!r}) for {sender_email!r}"
+            f"(match_method={match_method!r}, classification={classification!r}) for {sender_email!r}"
         )
 
     else:
