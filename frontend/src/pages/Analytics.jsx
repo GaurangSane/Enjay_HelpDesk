@@ -105,7 +105,7 @@ export default function Analytics() {
           border: '1px solid var(--border-color)',
           borderRadius: 'var(--radius-lg)',
           padding: 'var(--space-lg)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          boxShadow: 'var(--shadow-card)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -128,7 +128,7 @@ export default function Analytics() {
           border: '1px solid var(--border-color)',
           borderRadius: 'var(--radius-lg)',
           padding: 'var(--space-lg)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          boxShadow: 'var(--shadow-card)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -151,7 +151,7 @@ export default function Analytics() {
           border: '1px solid var(--border-color)',
           borderRadius: 'var(--radius-lg)',
           padding: 'var(--space-lg)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          boxShadow: 'var(--shadow-card)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -174,7 +174,7 @@ export default function Analytics() {
           border: '1px solid var(--border-color)',
           borderRadius: 'var(--radius-lg)',
           padding: 'var(--space-lg)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          boxShadow: 'var(--shadow-card)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -200,7 +200,7 @@ export default function Analytics() {
           border: '1px solid var(--border-color)',
           borderRadius: 'var(--radius-lg)',
           padding: 'var(--space-lg)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+          boxShadow: 'var(--shadow-card)'
         }}>
           <h3 style={{ marginBottom: 'var(--space-md)', fontSize: 'var(--font-size-lg)' }}>
             Resolution Breakdown (Bar Chart)
@@ -233,7 +233,7 @@ export default function Analytics() {
           border: '1px solid var(--border-color)',
           borderRadius: 'var(--radius-lg)',
           padding: 'var(--space-lg)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+          boxShadow: 'var(--shadow-card)'
         }}>
           <h3 style={{ marginBottom: 'var(--space-md)', fontSize: 'var(--font-size-lg)' }}>
             Resolution Share (Donut Chart)

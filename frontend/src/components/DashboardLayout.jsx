@@ -62,7 +62,7 @@ export default function DashboardLayout() {
     borderRadius:    'var(--radius-md)',
     fontSize:        'var(--font-size-sm)',
     fontWeight:      isActive ? 600 : 400,
-    backgroundColor: isActive ? 'rgba(91,156,246,0.10)' : 'transparent',
+    backgroundColor: isActive ? 'rgba(37,99,235,0.08)' : 'transparent',
     borderLeft:      isActive ? '2px solid var(--accent-primary)' : '2px solid transparent',
     transition:      'background-color 150ms ease, color 150ms ease, border-color 150ms ease',
   });

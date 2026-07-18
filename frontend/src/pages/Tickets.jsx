@@ -149,7 +149,7 @@ export default function Tickets({ status }) {
           {/* ── Desktop: native <table> (hidden on mobile via CSS) ─── */}
           <table className="ticket-table">
             <thead>
-              <tr style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}>
+              <tr style={{ backgroundColor: 'var(--surface-raised)' }}>
                 <th style={{ paddingLeft: '16px' }}>Subject</th>
                 <th>Customer</th>
                 <th>Status</th>

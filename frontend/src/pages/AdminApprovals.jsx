@@ -92,7 +92,7 @@ export default function AdminApprovals() {
           padding: 'var(--space-md) var(--space-lg)',
           backgroundColor: toast.type === 'success' ? 'var(--accent-success)' : 'var(--accent-danger)',
           color: '#ffffff', borderRadius: 'var(--radius-md)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 1100, fontWeight: 'bold',
+          boxShadow: 'var(--shadow-raised)', zIndex: 1100, fontWeight: 'bold',
         }}>
           {toast.message}
         </div>

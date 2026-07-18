@@ -150,7 +150,7 @@ export default function SaveToKBModal({ initialTitle = '', initialContent = '', 
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--space-md)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          boxShadow: 'var(--shadow-raised)',
           maxHeight: '90vh',
           overflowY: 'auto',
         }}
@@ -314,7 +314,7 @@ export default function SaveToKBModal({ initialTitle = '', initialContent = '', 
               display: 'flex',
               flexDirection: 'column',
               gap: 'var(--space-md)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              boxShadow: 'var(--shadow-raised)',
             }}
           >
             <div>

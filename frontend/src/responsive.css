@@ -42,7 +42,7 @@
   display: none;
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(15, 23, 42, 0.35);
   z-index: 200;
   /* no transition — instant on open, animated close handled by drawer itself */
 }
@@ -87,7 +87,7 @@
     transform: translateX(-100%);
     transition: transform 150ms ease;
     overflow-y: auto;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+    box-shadow: 4px 0 24px rgba(15, 23, 42, 0.12);
     /* Still rendered in DOM, just off-screen */
   }
 

@@ -26,7 +26,7 @@ export default function PendingApproval() {
         backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)',
         border: '1px solid var(--border-color)',
         display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)',
-        textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+        textAlign: 'center', boxShadow: 'var(--shadow-raised)',
       }}>
         <div style={{ fontSize: '56px', lineHeight: 1 }}>⏳</div>
 

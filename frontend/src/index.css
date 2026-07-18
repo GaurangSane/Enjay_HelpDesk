@@ -6,19 +6,19 @@
 /* ── Google Fonts are loaded via index.html <link> ─────────────────────── */
 
 :root {
-  /* ── Brand Colors ──────────────────────────────────────────────────── */
-  --bg:              #12181F;
-  --surface:         #1B232D;
-  --surface-raised:  #212C38;   /* one step above --surface, for hover/nested */
-  --text:            #E4E9EE;
-  --text-muted:      #8891A0;
-  --accent-cleared:  #4FD1A5;   /* confidence ≥ 80 / AI resolved / success */
-  --accent-review:   #E8A44C;   /* confidence < 80 / hitl / warning */
-  --accent-danger:   #EF6B6B;   /* errors, destructive */
-  --accent-primary:  #5B9CF6;   /* primary actions, links */
-  --accent-secondary:#9B7EF8;   /* AI / secondary highlights */
-  --border:          #2A3540;
-  --border-focus:    #5B9CF6;
+  /* ── Brand Colors (Light Theme) ────────────────────────────────────── */
+  --bg:              #F7F9FB;   /* soft off-white page background */
+  --surface:         #FFFFFF;   /* cards, panels, sidebar */
+  --surface-raised:  #F1F5F9;   /* one step above --surface: hover, nested, inputs */
+  --text:            #1A2332;   /* near-black — strong contrast on white */
+  --text-muted:      #64748B;   /* secondary text — passes WCAG AA on white */
+  --accent-cleared:  #16A34A;   /* professional green — AI resolved / success */
+  --accent-review:   #D97706;   /* amber — HITL / needs-review / warning */
+  --accent-danger:   #DC2626;   /* red — errors, destructive actions */
+  --accent-primary:  #2563EB;   /* blue — primary buttons, links, active states */
+  --accent-secondary:#7C3AED;   /* violet — AI highlights / secondary */
+  --border:          #E2E8F0;   /* light gray dividers */
+  --border-focus:    #2563EB;   /* matches --accent-primary */
 
   /* Legacy aliases — kept for backward compat while pages migrate */
   --bg-primary:      var(--bg);
@@ -71,9 +71,9 @@
   --font-size-2xl: 1.5rem;    /* 24px */
   --font-size-3xl: 1.875rem;  /* 30px */
 
-  /* ── Shadows ──────────────────────────────────────────────────────── */
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
-  --shadow-raised: 0 2px 8px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.25);
+  /* ── Shadows (light theme — subtle, not dark-mode-heavy) ────────────── */
+  --shadow-card:   0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(15,23,42,0.04);
+  --shadow-raised: 0 4px 16px rgba(15,23,42,0.10), 0 1px 4px rgba(15,23,42,0.06);
 
   /* ── Transitions (minimal — 150ms only) ─────────────────────────── */
   --transition-fast: 150ms ease;
@@ -172,7 +172,7 @@ textarea:focus,
 select:focus {
   outline: none;
   border-color: var(--border-focus) !important;
-  box-shadow: 0 0 0 3px rgba(91, 156, 246, 0.18) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14) !important;
   background-color: var(--surface-raised) !important;
 }
 
@@ -224,7 +224,7 @@ summary:focus-visible {
 
 .card:hover {
   box-shadow: var(--shadow-raised);
-  border-color: rgba(91, 156, 246, 0.2);
+  border-color: rgba(37, 99, 235, 0.18);
 }
 
 .card-secondary,
@@ -252,33 +252,33 @@ summary:focus-visible {
 }
 
 .badge-open {
-  background-color: rgba(91, 156, 246, 0.15);
+  background-color: rgba(37, 99, 235, 0.09);
   color: var(--accent-primary);
-  border-color: rgba(91, 156, 246, 0.3);
+  border-color: rgba(37, 99, 235, 0.22);
 }
 
 .badge-pending {
-  background-color: rgba(232, 164, 76, 0.15);
+  background-color: rgba(217, 119, 6, 0.09);
   color: var(--accent-review);
-  border-color: rgba(232, 164, 76, 0.3);
+  border-color: rgba(217, 119, 6, 0.25);
 }
 
 .badge-hitl {
-  background-color: rgba(239, 107, 107, 0.15);
+  background-color: rgba(220, 38, 38, 0.09);
   color: var(--accent-danger);
-  border-color: rgba(239, 107, 107, 0.3);
+  border-color: rgba(220, 38, 38, 0.22);
 }
 
 .badge-ai_resolved {
-  background-color: rgba(79, 209, 165, 0.15);
+  background-color: rgba(22, 163, 74, 0.09);
   color: var(--accent-cleared);
-  border-color: rgba(79, 209, 165, 0.3);
+  border-color: rgba(22, 163, 74, 0.25);
 }
 
 .badge-resolved {
-  background-color: rgba(136, 145, 160, 0.15);
+  background-color: rgba(100, 116, 139, 0.09);
   color: var(--text-muted);
-  border-color: rgba(136, 145, 160, 0.3);
+  border-color: rgba(100, 116, 139, 0.22);
 }
 
 /* ── Scrollbars ─────────────────────────────────────────────────────────── */
@@ -351,7 +351,7 @@ summary {
 summary::-webkit-details-marker { display: none; }
 
 summary:hover {
-  background-color: rgba(255, 255, 255, 0.025) !important;
+  background-color: rgba(15, 23, 42, 0.035) !important;
 }
 
 /* ── Error / Alert Banners ──────────────────────────────────────────────── */
@@ -363,20 +363,20 @@ summary:hover {
 }
 
 .alert-danger {
-  background-color: rgba(239, 107, 107, 0.1);
-  border-color: rgba(239, 107, 107, 0.4);
+  background-color: rgba(220, 38, 38, 0.07);
+  border-color: rgba(220, 38, 38, 0.28);
   color: var(--accent-danger);
 }
 
 .alert-warning {
-  background-color: rgba(232, 164, 76, 0.1);
-  border-color: rgba(232, 164, 76, 0.4);
+  background-color: rgba(217, 119, 6, 0.07);
+  border-color: rgba(217, 119, 6, 0.28);
   color: var(--accent-review);
 }
 
 .alert-success {
-  background-color: rgba(79, 209, 165, 0.1);
-  border-color: rgba(79, 209, 165, 0.4);
+  background-color: rgba(22, 163, 74, 0.07);
+  border-color: rgba(22, 163, 74, 0.28);
   color: var(--accent-cleared);
 }
 

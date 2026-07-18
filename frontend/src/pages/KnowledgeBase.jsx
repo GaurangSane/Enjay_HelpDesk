@@ -29,7 +29,7 @@ export default function KnowledgeBase() {
           backgroundColor: toast.type === 'success' ? 'var(--accent-success)' : 'var(--accent-danger)',
           color: '#ffffff',
           borderRadius: 'var(--radius-md)',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+          boxShadow: 'var(--shadow-raised)',
           zIndex: 1100,
           fontWeight: 'bold',
           transition: 'all 0.3s ease'
