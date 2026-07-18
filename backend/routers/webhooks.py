@@ -274,12 +274,14 @@ async def resend_webhook(request: Request):
     #         match_method = "header"
 
     # ── Method B: Subject + customer_email matching ───────────────────────────
+    # Broaden the status filter to catch 'ai_resolved' and 'resolved' tickets
+    # too — a customer replying to any of these should reopen the thread.
     if not matched_ticket_id:
         existing_response = (
             supabase.table("tickets")
             .select("id, subject, status")
             .eq("customer_email", sender_email)
-            .in_("status", ["open", "pending", "hitl"])
+            .in_("status", ["open", "pending", "hitl", "ai_resolved", "resolved"])
             .execute()
         )
 
@@ -306,14 +308,41 @@ async def resend_webhook(request: Request):
 
     # ── Step 7: Route to existing thread or create new ticket ─────────────────
     if matched_ticket_id:
-        # Thread exists — append new customer message and re-surface the ticket
+        # Thread exists — append new customer message, then conditionally
+        # re-surface the ticket based on its current status:
+        #
+        #   pending / ai_resolved / resolved  →  reset to 'open' (needs fresh attention)
+        #   open / hitl                        →  leave as-is (already awaiting action)
+        #
+        # We re-fetch the current status because it may have changed between the
+        # match query above and the update below (narrow but real race window).
+        current_status_resp = (
+            supabase.table("tickets")
+            .select("status")
+            .eq("id", matched_ticket_id)
+            .single()
+            .execute()
+        )
+        current_status = (current_status_resp.data or {}).get("status", "open")
+
         insert_response = supabase.table("ticket_messages").insert({
             "ticket_id": matched_ticket_id,
             "sender": "customer",
             "content": body,
         }).execute()
 
-        supabase.table("tickets").update({"status": "open"}).eq("id", matched_ticket_id).execute()
+        REOPEN_STATUSES = {"pending", "ai_resolved", "resolved"}
+        if current_status in REOPEN_STATUSES:
+            supabase.table("tickets").update({"status": "open"}).eq("id", matched_ticket_id).execute()
+            logger.info(
+                f"[INBOUND] Ticket {matched_ticket_id}: status '{current_status}' → 'open' "
+                f"(customer reply received)."
+            )
+        else:
+            logger.info(
+                f"[INBOUND] Ticket {matched_ticket_id}: status '{current_status}' left unchanged "
+                f"(already awaiting action)."
+            )
 
         ticket_id = matched_ticket_id
 

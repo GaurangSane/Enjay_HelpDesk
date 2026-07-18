@@ -63,8 +63,14 @@ def send_reply_email(to: str, subject: str, content: str) -> tuple[bool, str | N
 
 def post_reply(ticket_id: str, content: str, sender: str) -> dict:
     """
-    Core reply logic: inserts a ticket_messages row, updates the parent ticket
-    status to 'pending', and dispatches the reply email via Resend.
+    Core reply logic: inserts a ticket_messages row, optionally updates the
+    parent ticket status, and dispatches the reply email via Resend.
+
+    Status transition rules (owned here):
+        sender='agent'  →  set status='pending'  (awaiting customer reply)
+        sender='ai'     →  do NOT touch status; handle_ai_response() will set
+                           'ai_resolved' after this call returns successfully,
+                           preventing a double-write race.
 
     Args:
         ticket_id: UUID of the parent ticket.
@@ -116,13 +122,27 @@ def post_reply(ticket_id: str, content: str, sender: str) -> dict:
 
     new_message_id: str = insert_resp.data[0]["id"]
 
-    # 3. Update parent ticket: status='pending', bump updated_at
-    supabase.table("tickets").update({
-        "status": "pending",
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("id", ticket_id).execute()
-
-    logger.info(f"Reply inserted | ticket={ticket_id} | message={new_message_id} | sender={sender}")
+    # 3. Update parent ticket status (agent replies only).
+    #    For AI replies, handle_ai_response() sets 'ai_resolved' after this
+    #    function returns — letting it own the full AI status transition.
+    if sender == "agent":
+        supabase.table("tickets").update({
+            "status": "pending",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", ticket_id).execute()
+        logger.info(
+            f"Reply inserted | ticket={ticket_id} | message={new_message_id} | "
+            f"sender={sender} | status→pending"
+        )
+    else:
+        # sender == 'ai': bump updated_at only; leave status untouched here.
+        supabase.table("tickets").update({
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", ticket_id).execute()
+        logger.info(
+            f"Reply inserted | ticket={ticket_id} | message={new_message_id} | "
+            f"sender={sender} | status unchanged (handle_ai_response will set ai_resolved)"
+        )
 
     # 4. Send reply email (non-fatal — failure keeps the DB row)
     reply_subject = f"Re: {original_subject}"

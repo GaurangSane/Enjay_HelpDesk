@@ -150,8 +150,30 @@ export default function TicketDetail() {
   const [sendError,   setSendError]   = useState(null);
   const [polishing,   setPolishing]   = useState(false);
   const [polishError, setPolishError] = useState(null);
+  const [resolving,   setResolving]   = useState(false);
+  const [resolveError,setResolveError]= useState(null);
 
-  // Save-to-KB state
+  // Current user role (fetched once on mount)
+  const [userRole, setUserRole] = useState(null);
+
+  useEffect(() => {
+    async function fetchUserRole() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+        const { data } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single();
+        if (data?.role) setUserRole(data.role);
+      } catch (err) {
+        console.error('Failed to fetch user role:', err);
+      }
+    }
+    fetchUserRole();
+  }, []);
+
   const [kbDraft, setKbDraft] = useState(null);
   const [kbToast, setKbToast] = useState(null);
 
@@ -259,6 +281,31 @@ export default function TicketDetail() {
     }
   };
 
+  const handleMarkResolved = async () => {
+    setResolving(true);
+    setResolveError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`http://localhost:8000/tickets/${id}/resolve`, {
+        method:  'PATCH',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to mark ticket as resolved.');
+      }
+      await fetchTicketDetails();
+    } catch (err) {
+      setResolveError(err.message || 'Failed to mark as resolved.');
+    } finally {
+      setResolving(false);
+    }
+  };
+
   /* ── Loading / error guards ───────────────────────────────────────── */
 
   if (loading) {
@@ -330,8 +377,39 @@ export default function TicketDetail() {
           </div>
         </div>
 
-        {/* Status badge */}
-        <StatusBadge status={ticket.status} />
+        {/* Status badge + Mark Resolved */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <StatusBadge status={ticket.status} />
+          {(userRole === 'agent' || userRole === 'admin') && ticket.status !== 'resolved' && (
+            <button
+              id="mark-resolved-btn"
+              type="button"
+              onClick={handleMarkResolved}
+              disabled={resolving}
+              title="Mark this ticket as resolved"
+              style={{
+                padding:         '5px 14px',
+                fontSize:        '12px',
+                fontWeight:      600,
+                border:          '1px solid var(--accent-cleared)',
+                borderRadius:    'var(--radius-md)',
+                backgroundColor: resolving ? 'rgba(52,211,153,0.1)' : 'rgba(52,211,153,0.12)',
+                color:           'var(--accent-cleared)',
+                cursor:          resolving ? 'not-allowed' : 'pointer',
+                whiteSpace:      'nowrap',
+                transition:      'background-color 150ms ease, border-color 150ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!resolving) e.currentTarget.style.backgroundColor = 'rgba(52,211,153,0.22)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(52,211,153,0.12)';
+              }}
+            >
+              {resolving ? 'Resolving…' : '✓ Mark Resolved'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Chat Thread ─────────────────────────────────────────────── */}
@@ -553,9 +631,9 @@ export default function TicketDetail() {
       )}
 
       {/* ── Error banners ────────────────────────────────────────────── */}
-      {(sendError || polishError) && (
+      {(sendError || polishError || resolveError) && (
         <div className="alert alert-danger" role="alert">
-          {sendError || polishError}
+          {sendError || polishError || resolveError}
         </div>
       )}
 

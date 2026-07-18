@@ -120,8 +120,13 @@ async def get_tickets(status: str | None = None, user: dict = Depends(get_curren
 @router.post("/{ticket_id}/reply", response_model=ReplyResponse)
 async def reply_to_ticket(ticket_id: str, body: ReplyRequest):
     """
-    Posts a reply to a ticket from an agent or AI, updates ticket status,
-    and dispatches the reply to the customer via Resend.
+    Posts a reply to a ticket from an agent or AI, conditionally updates ticket
+    status, and dispatches the reply to the customer via Resend.
+
+    Status transition ownership:
+        sender='agent'  →  post_reply() sets status='pending'
+        sender='ai'     →  post_reply() does NOT touch status;
+                           handle_ai_response() will set 'ai_resolved' after this.
 
     Delegates core logic to services/reply_service.py so the same code
     path is used by both the HTTP endpoint and the internal HITL pipeline.
@@ -137,6 +142,40 @@ async def reply_to_ticket(ticket_id: str, body: ReplyRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{ticket_id}/resolve")
+async def resolve_ticket(ticket_id: str, user: dict = Depends(get_current_user)):
+    """
+    Marks a ticket as 'resolved' by an agent or admin.
+
+    Only 'agent' and 'admin' roles are allowed. Returns the updated ticket row.
+    Idempotent — resolving an already-resolved ticket is a no-op success.
+    """
+    if user["role"] not in ("agent", "admin"):
+        raise HTTPException(status_code=403, detail="Forbidden: only agents and admins can resolve tickets.")
+
+    # Verify ticket exists
+    ticket_resp = (
+        supabase.table("tickets")
+        .select("id, status")
+        .eq("id", ticket_id)
+        .single()
+        .execute()
+    )
+    if not ticket_resp.data:
+        raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found.")
+
+    from datetime import datetime, timezone
+    supabase.table("tickets").update({
+        "status": "resolved",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", ticket_id).execute()
+
+    logger.info(
+        f"Ticket {ticket_id}: status set to 'resolved' by user={user['email']} (role={user['role']})"
+    )
+    return {"ticket_id": ticket_id, "status": "resolved"}
 
 
 @router.get("/{ticket_id}/hitl-attempts")
