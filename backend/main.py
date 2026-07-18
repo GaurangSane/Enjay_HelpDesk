@@ -9,7 +9,7 @@ from backend.routers import tickets, webhooks, kb_articles, analytics, approvals
 sentry_sdk.init(
     dsn=os.environ['SENTRY_DSN'],
     traces_sample_rate=0.1,
-    environment='development'
+    environment=os.environ.get('APP_ENV', 'development'),
 )
 
 app = FastAPI(
@@ -19,10 +19,14 @@ app = FastAPI(
 )
 
 # CORS Middleware
-origins = [
-    "http://localhost:5173",
-    "https://your-app.vercel.app",
-]
+# ALLOWED_ORIGINS is a comma-separated list set in Railway env vars.
+# Example: "https://enjay-helpdesk.vercel.app,https://www.enjay.example.com"
+# Falls back to localhost only when the var is absent (local dev).
+_raw_origins = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173"
+)
+origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,

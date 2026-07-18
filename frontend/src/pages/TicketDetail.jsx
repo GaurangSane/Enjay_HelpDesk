@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import SaveToKBModal from '../components/SaveToKBModal';
 import ConfidenceGate from '../components/ConfidenceGate';
+import { apiUrl } from '../api';
 
 /* ── Tiny shared helpers ───────────────────────────────────────────────── */
 
@@ -189,7 +190,7 @@ export default function TicketDetail() {
   const fetchHitlAttempt = async () => {
     setLoadingHitl(true);
     try {
-      const res = await fetch(`http://localhost:8000/tickets/${id}/hitl-attempts`);
+      const res = await fetch(apiUrl(`/tickets/${id}/hitl-attempts`));
       if (res.ok) {
         const result = await res.json();
         setHitlAttempt(result.hitl_attempt);
@@ -240,7 +241,7 @@ export default function TicketDetail() {
     setSending(true);
     setSendError(null);
     try {
-      const res = await fetch(`http://localhost:8000/tickets/${id}/reply`, {
+      const res = await fetch(apiUrl(`/tickets/${id}/reply`), {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ content: replyText, sender: 'agent' }),
@@ -263,7 +264,7 @@ export default function TicketDetail() {
     setPolishing(true);
     setPolishError(null);
     try {
-      const res = await fetch('http://localhost:8000/tickets/polish', {
+      const res = await fetch(apiUrl('/tickets/polish'), {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ draft_text: replyText }),
@@ -287,7 +288,7 @@ export default function TicketDetail() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      const res = await fetch(`http://localhost:8000/tickets/${id}/resolve`, {
+      const res = await fetch(apiUrl(`/tickets/${id}/resolve`), {
         method:  'PATCH',
         headers: {
           'Content-Type':  'application/json',

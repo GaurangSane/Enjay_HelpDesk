@@ -1,3 +1,4 @@
+import os
 import logging
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -9,7 +10,9 @@ from qdrant_client.models import (
 
 logger = logging.getLogger(__name__)
 
-QDRANT_URL = "http://localhost:6333"
+# Read from environment — Railway/production sets these; local dev falls back.
+QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")  # None when running locally
 
 # Collection names — constants imported by other services
 KB_ARTICLES_COLLECTION = "kb_articles"
@@ -22,8 +25,8 @@ DENSE_VECTOR_NAME = "dense"
 # Sparse vector config: BM25-style keyword matching for hybrid search
 SPARSE_VECTOR_NAME = "sparse"
 
-# Singleton client — imported directly by other services
-qdrant = QdrantClient(url=QDRANT_URL)
+# Singleton client — authenticated when QDRANT_API_KEY is set (Qdrant Cloud)
+qdrant = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
 
 def _create_hybrid_collection(collection_name: str, recreate: bool = False) -> None:

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { apiUrl } from '../api';
 import {
   BarChart,
   Bar,
@@ -30,7 +31,7 @@ export default function Analytics() {
           throw new Error('No active user session found.');
         }
 
-        const response = await fetch('http://localhost:8000/analytics/deflection-rate', {
+        const response = await fetch(apiUrl('/analytics/deflection-rate'), {
           headers: {
             'Authorization': `Bearer ${session.access_token}`
           }

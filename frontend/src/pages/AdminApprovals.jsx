@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { apiUrl } from '../api';
 
 export default function AdminApprovals() {
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -20,7 +21,7 @@ export default function AdminApprovals() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No active session.');
 
-      const response = await fetch('http://localhost:8000/admin/approvals', {
+      const response = await fetch(apiUrl('/admin/approvals'), {
         headers: { 'Authorization': `Bearer ${session.access_token}` },
       });
 
@@ -42,7 +43,7 @@ export default function AdminApprovals() {
     setApproving(prev => ({ ...prev, [userId]: true }));
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch(`http://localhost:8000/admin/approvals/${userId}/approve`, {
+      const response = await fetch(apiUrl(`/admin/approvals/${userId}/approve`), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,

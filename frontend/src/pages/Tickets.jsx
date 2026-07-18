@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import ConfidenceGate from '../components/ConfidenceGate';
+import { apiUrl } from '../api';
 
 const TABS = [
   { label: 'Open',        value: 'open' },
@@ -78,7 +79,7 @@ export default function Tickets({ status }) {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
 
-        const res = await fetch(`http://localhost:8000/tickets/?status=${status}`, {
+        const res = await fetch(apiUrl(`/tickets/?status=${status}`), {
           headers: { Authorization: `Bearer ${session?.access_token}` },
         });
         if (!res.ok) throw new Error(`Error: ${res.status} ${res.statusText}`);

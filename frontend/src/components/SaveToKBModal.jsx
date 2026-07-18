@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiUrl } from '../api';
 
 /**
  * SaveToKBModal
@@ -36,7 +37,7 @@ export default function SaveToKBModal({ initialTitle = '', initialContent = '', 
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch('http://localhost:8000/kb-articles/', {
+      const response = await fetch(apiUrl('/kb-articles/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, content }),
@@ -65,7 +66,7 @@ export default function SaveToKBModal({ initialTitle = '', initialContent = '', 
     setError(null);
     try {
       const response = await fetch(
-        `http://localhost:8000/kb-articles/${selectedMatchId}/update-version`,
+        apiUrl(`/kb-articles/${selectedMatchId}/update-version`),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -97,7 +98,7 @@ export default function SaveToKBModal({ initialTitle = '', initialContent = '', 
     setError(null);
 
     try {
-      const preflightResponse = await fetch('http://localhost:8000/kb-articles/preflight-check', {
+      const preflightResponse = await fetch(apiUrl('/kb-articles/preflight-check'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
