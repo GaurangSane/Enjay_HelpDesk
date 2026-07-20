@@ -25,7 +25,7 @@ app = FastAPI(
 _raw_origins = os.environ.get(
     "ALLOWED_ORIGINS",
     "http://localhost:5173"
-    "https://enjayhelpdesk-production.up.railway.app"
+    "https://enjay-help-desk.vercel.app"
 )
 origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
