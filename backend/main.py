@@ -27,6 +27,7 @@ _raw_origins = os.environ.get(
     "http://localhost:5173,https://enjay-help-desk.vercel.app"
 )
 origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+print(f"[CORS DEBUG] Loaded origins: {origins}")
 
 app.add_middleware(
     CORSMiddleware,
