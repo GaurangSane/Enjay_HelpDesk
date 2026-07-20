@@ -24,8 +24,7 @@ app = FastAPI(
 # Falls back to localhost only when the var is absent (local dev).
 _raw_origins = os.environ.get(
     "ALLOWED_ORIGINS",
-    "http://localhost:5173",
-    "https://enjay-help-desk.vercel.app"
+    "http://localhost:5173,https://enjay-help-desk.vercel.app"
 )
 origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
