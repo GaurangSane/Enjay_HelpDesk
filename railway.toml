@@ -1,4 +1,4 @@
-# railway.toml — Enjay Helpdesk Backend
+D# railway.toml — Enjay Helpdesk Backend
 # https://docs.railway.app/reference/config-as-code
 #
 # This file defines the two Railway services in one repo:
@@ -10,6 +10,7 @@
 
 [build]
 builder = "nixpacks"
+buildCommand = "cd backend && pip install -r requirements.txt"
 
 [[services]]
 name = "web"
@@ -23,4 +24,9 @@ healthcheckTimeout = 30
 name = "worker"
 
 [services.deploy]
-startCommand = "celery -A backend.celery_app.celery_app worker --loglevel=info --concurrency=2"
+startCommand = "celery -A backend.celery_app.celery_app worker --loglevel=info --pool=solo --concurrency=2"
+
+[
+deploy
+]
+startCommand = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
