@@ -1,4 +1,4 @@
-D# railway.toml — Enjay Helpdesk Backend
+# railway.toml — Enjay Helpdesk Backend
 # https://docs.railway.app/reference/config-as-code
 #
 # This file defines the two Railway services in one repo:
