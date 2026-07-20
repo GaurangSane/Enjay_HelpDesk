@@ -43,16 +43,17 @@ function TabBar({ status }) {
             role="tab"
             aria-selected={isActive}
             style={{
-              padding:         '8px 14px',
+              padding:         '8px 16px',
               color:           isActive ? 'var(--text)' : 'var(--text-muted)',
               textDecoration:  'none',
               fontWeight:      isActive ? 600 : 400,
               fontSize:        'var(--font-size-sm)',
-              borderBottom:    isActive ? '2px solid var(--accent-primary)' : '2px solid transparent',
+              /* Border is now handled by CSS ::after sliding underline */
+              borderBottom:    '2px solid transparent',
               marginBottom:    '-1px',
               borderRadius:    'var(--radius-sm) var(--radius-sm) 0 0',
-              backgroundColor: isActive ? 'rgba(91,156,246,0.06)' : 'transparent',
-              transition:      'color 150ms ease, background-color 150ms ease',
+              backgroundColor: isActive ? 'rgba(37,99,235,0.05)' : 'transparent',
+              /* Transition handled by CSS */
               whiteSpace:      'nowrap',
               flexShrink:      0,
             }}
@@ -98,30 +99,45 @@ export default function Tickets({ status }) {
   // ── Shared empty / loading / error states ───────────────────────────
   const emptyState = (
     <div style={{
-      padding:         '48px 24px',
+      padding:         '64px 24px',
       textAlign:       'center',
       backgroundColor: 'var(--surface)',
-      borderRadius:    'var(--radius-md)',
+      borderRadius:    'var(--radius-lg)',
       border:          '1px dashed var(--border)',
       color:           'var(--text-muted)',
       fontSize:        'var(--font-size-sm)',
+      boxShadow:       'var(--shadow-xs)',
+      lineHeight:      1.7,
     }}>
-      No <strong>{status.replace('_', ' ')}</strong> tickets at this time.
+      <div style={{ fontSize: '28px', marginBottom: '12px', opacity: 0.5 }}>📭</div>
+      No <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{status.replace('_', ' ')}</strong> tickets at this time.
     </div>
   );
 
   if (loading) {
     return (
       <div>
-        <h1 className="page-title" style={{ marginBottom: '20px' }}>Support Tickets</h1>
+        <h1 className="page-title" style={{ marginBottom: '24px' }}>Support Tickets</h1>
         <TabBar status={status} />
-        <div style={{
-          padding: '48px 24px', textAlign: 'center',
-          color: 'var(--text-muted)', fontSize: 'var(--font-size-sm)',
-          backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--border)',
-        }}>
-          Loading tickets…
+        {/* Skeleton loading placeholder — shimmer rows */}
+        <div className="ticket-table-wrap" aria-busy="true" aria-label="Loading tickets">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="skeleton-row">
+              {/* Subject column */}
+              <div style={{ flex: '0 0 38%', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span className="skeleton skeleton-text" style={{ width: `${72 - i * 4}%` }} />
+                <span className="skeleton skeleton-text-sm" style={{ width: '44px' }} />
+              </div>
+              {/* Customer column */}
+              <span className="skeleton skeleton-text" style={{ flex: '0 0 20%', width: '80%' }} />
+              {/* Status column */}
+              <span className="skeleton skeleton-badge" style={{ flex: '0 0 10%' }} />
+              {/* Confidence column */}
+              <span className="skeleton skeleton-text" style={{ flex: '0 0 14%', width: '90px', borderRadius: '9999px' }} />
+              {/* Date column */}
+              <span className="skeleton skeleton-text" style={{ flex: '0 0 14%', width: '70px' }} />
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -141,7 +157,7 @@ export default function Tickets({ status }) {
 
   return (
     <div>
-      <h1 className="page-title" style={{ marginBottom: '20px' }}>Support Tickets</h1>
+      <h1 className="page-title" style={{ marginBottom: '24px' }}>Support Tickets</h1>
       <TabBar status={status} />
 
       {tickets.length === 0 ? emptyState : (

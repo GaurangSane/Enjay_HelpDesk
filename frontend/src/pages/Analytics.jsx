@@ -57,15 +57,42 @@ export default function Analytics() {
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '60vh',
-        color: 'var(--text-secondary)',
-        fontFamily: 'var(--font-family)'
-      }}>
-        Loading Analytics...
+      <div>
+        <span className="skeleton skeleton-text" style={{ width: '180px', height: '28px', marginBottom: '28px', display: 'block' }} />
+        {/* Stat cards skeleton */}
+        <div className="analytics-grid" style={{ marginBottom: '28px' }}>
+          {[...Array(4)].map((_, i) => (
+            <div key={i} style={{
+              backgroundColor: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px 24px',
+              boxShadow: 'var(--shadow-card)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}>
+              <span className="skeleton skeleton-text-sm" style={{ width: '80px' }} />
+              <span className="skeleton skeleton-text" style={{ width: '60px', height: '28px' }} />
+              <span className="skeleton skeleton-text-sm" style={{ width: '110px' }} />
+            </div>
+          ))}
+        </div>
+        {/* Charts skeleton */}
+        <div className="charts-grid">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} style={{
+              backgroundColor: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px 24px',
+              boxShadow: 'var(--shadow-card)',
+            }}>
+              <span className="skeleton skeleton-text" style={{ width: '140px', marginBottom: '20px', display: 'block' }} />
+              <span className="skeleton" style={{ width: '100%', height: '200px', borderRadius: 'var(--radius-md)' }} />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

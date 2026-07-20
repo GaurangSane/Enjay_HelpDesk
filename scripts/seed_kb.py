@@ -11,6 +11,7 @@ Requirements: backend/.env must exist and Celery/Redis must be running.
 """
 
 import os
+import sys
 import json
 import time
 import logging
@@ -22,7 +23,10 @@ from backend.db.supabase_client import supabase
 from backend.services.tasks import sync_kb_article_task
 
 # ── Config ───────────────────────────────────────────────────────────────────
-SEED_FILE = Path(__file__).resolve().parent.parent / "seed_kb_articles.json"
+# Accept an optional path argument: python -m scripts.seed_kb [path/to/file.json]
+# Falls back to seed_kb_articles.json in the repo root if none is given.
+_DEFAULT_SEED_FILE = Path(__file__).resolve().parent.parent / "seed_kb_articles.json"
+SEED_FILE = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else _DEFAULT_SEED_FILE
 
 # Google text-embedding-004 allows ~1500 RPM on the free tier.
 # We embed 1 article at a time (potentially multiple chunks), so 1 article

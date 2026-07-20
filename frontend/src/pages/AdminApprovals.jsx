@@ -74,14 +74,16 @@ export default function AdminApprovals() {
   }, []);
 
   const cardStyle = {
-    backgroundColor: 'var(--bg-secondary)',
-    border: '1px solid var(--border-color)',
-    borderRadius: 'var(--radius-md)',
-    padding: 'var(--space-md)',
+    backgroundColor: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)',   /* elevated card feel */
+    padding: 'var(--space-4) var(--space-5)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 'var(--space-md)',
+    boxShadow: 'var(--shadow-card)',
+    transition: 'box-shadow var(--transition-normal), border-color var(--transition-normal)',
   };
 
   return (
@@ -138,8 +140,25 @@ export default function AdminApprovals() {
       )}
 
       {loading ? (
-        <div style={{ color: 'var(--text-secondary)', padding: 'var(--space-xl)', textAlign: 'center' }}>
-          Loading pending users…
+        /* Skeleton loading placeholders for pending users */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {[...Array(3)].map((_, i) => (
+            <div key={i} style={{
+              ...cardStyle,
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                <span className="skeleton skeleton-text" style={{ width: `${55 - i * 5}%`, height: '15px' }} />
+                <span className="skeleton skeleton-text-sm" style={{ width: '150px' }} />
+                <span className="skeleton skeleton-text-sm" style={{ width: '200px' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0 }}>
+                <span className="skeleton skeleton-badge" style={{ width: '110px' }} />
+                <span className="skeleton" style={{ width: '90px', height: '34px', borderRadius: 'var(--radius-md)' }} />
+              </div>
+            </div>
+          ))}
         </div>
       ) : pendingUsers.length === 0 ? (
         <div style={{
@@ -186,17 +205,30 @@ export default function AdminApprovals() {
                   onClick={() => handleApprove(user.user_id, user.email)}
                   disabled={approving[user.user_id]}
                   style={{
-                    padding: 'var(--space-sm) var(--space-md)',
-                    borderRadius: 'var(--radius-sm)',
+                    padding: '7px 16px',
+                    borderRadius: 'var(--radius-md)',
                     border: 'none',
-                    backgroundColor: approving[user.user_id] ? 'rgba(16,185,129,0.4)' : 'var(--accent-success)',
+                    backgroundColor: approving[user.user_id] ? 'rgba(22,163,74,0.45)' : 'var(--accent-success)',
                     color: '#ffffff',
-                    fontWeight: 'bold',
+                    fontWeight: 600,
                     cursor: approving[user.user_id] ? 'not-allowed' : 'pointer',
                     fontSize: 'var(--font-size-sm)',
                     whiteSpace: 'nowrap',
-                    transition: 'opacity 0.15s',
+                    boxShadow: approving[user.user_id] ? 'none' : '0 1px 3px rgba(22,163,74,0.30)',
+                    transition: 'filter 150ms ease, box-shadow 150ms ease, transform 150ms ease',
                   }}
+                  onMouseEnter={(e) => {
+                    if (!approving[user.user_id]) {
+                      e.currentTarget.style.filter = 'brightness(1.08)';
+                      e.currentTarget.style.boxShadow = '0 4px 10px rgba(22,163,74,0.35)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.filter = 'brightness(1)';
+                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(22,163,74,0.30)';
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.967)'; }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                 >
                   {approving[user.user_id] ? 'Approving…' : '✓ Approve'}
                 </button>

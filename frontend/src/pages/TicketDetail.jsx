@@ -311,8 +311,71 @@ export default function TicketDetail() {
 
   if (loading) {
     return (
-      <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: 'var(--font-size-sm)' }}>
-        Loading ticket…
+      <div style={{ padding: '0', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 104px)', gap: '16px' }}>
+        {/* Header skeleton */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+          borderBottom: '1px solid var(--border)', paddingBottom: '16px', gap: '16px',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+            <span className="skeleton skeleton-text-sm" style={{ width: '80px' }} />
+            <span className="skeleton skeleton-text" style={{ width: '65%', height: '22px' }} />
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <span className="skeleton skeleton-text-sm" style={{ width: '140px' }} />
+              <span className="skeleton skeleton-text-sm" style={{ width: '80px' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <span className="skeleton skeleton-badge" />
+            <span className="skeleton" style={{ width: '110px', height: '32px', borderRadius: 'var(--radius-md)' }} />
+          </div>
+        </div>
+
+        {/* Chat thread skeleton */}
+        <div style={{
+          flex: 1,
+          padding: '16px',
+          backgroundColor: 'var(--surface)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-card)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          overflowY: 'hidden',
+        }}>
+          {[...Array(4)].map((_, i) => (
+            <div
+              key={i}
+              style={{
+                alignSelf:     i % 2 === 0 ? 'flex-start' : 'flex-end',
+                display:       'flex',
+                flexDirection: 'column',
+                gap:           '6px',
+                maxWidth:      '60%',
+              }}
+            >
+              <span
+                className="skeleton"
+                style={{
+                  height:       `${48 + (i % 3) * 14}px`,
+                  width:        `${180 + (i % 2) * 80}px`,
+                  borderRadius: 'var(--radius-md)',
+                }}
+              />
+              <span className="skeleton skeleton-text-sm" style={{ width: '70px', alignSelf: i % 2 === 0 ? 'flex-start' : 'flex-end' }} />
+            </div>
+          ))}
+        </div>
+
+        {/* Reply area skeleton */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+          <span className="skeleton" style={{ flex: 1, height: '84px', borderRadius: 'var(--radius-md)' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <span className="skeleton" style={{ width: '120px', height: '40px', borderRadius: 'var(--radius-md)' }} />
+            <span className="skeleton" style={{ width: '80px', height: '40px', borderRadius: 'var(--radius-md)' }} />
+          </div>
+        </div>
       </div>
     );
   }
@@ -389,23 +452,30 @@ export default function TicketDetail() {
               disabled={resolving}
               title="Mark this ticket as resolved"
               style={{
-                padding:         '5px 14px',
+                padding:         '6px 16px',
                 fontSize:        '12px',
                 fontWeight:      600,
                 border:          '1px solid var(--accent-cleared)',
                 borderRadius:    'var(--radius-md)',
-                backgroundColor: resolving ? 'rgba(52,211,153,0.1)' : 'rgba(52,211,153,0.12)',
+                backgroundColor: resolving ? 'rgba(22,163,74,0.1)' : 'rgba(22,163,74,0.1)',
                 color:           'var(--accent-cleared)',
                 cursor:          resolving ? 'not-allowed' : 'pointer',
                 whiteSpace:      'nowrap',
-                transition:      'background-color 150ms ease, border-color 150ms ease',
+                boxShadow:       resolving ? 'none' : '0 1px 3px rgba(22,163,74,0.22)',
+                transition:      'background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease',
               }}
               onMouseEnter={(e) => {
-                if (!resolving) e.currentTarget.style.backgroundColor = 'rgba(52,211,153,0.22)';
+                if (!resolving) {
+                  e.currentTarget.style.backgroundColor = 'rgba(22,163,74,0.18)';
+                  e.currentTarget.style.boxShadow = '0 4px 10px rgba(22,163,74,0.28)';
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(52,211,153,0.12)';
+                e.currentTarget.style.backgroundColor = 'rgba(22,163,74,0.1)';
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(22,163,74,0.22)';
               }}
+              onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.968)'; }}
+              onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
             >
               {resolving ? 'Resolving…' : '✓ Mark Resolved'}
             </button>
@@ -445,13 +515,14 @@ export default function TicketDetail() {
       {/* ── AI Draft (Needs Review) Panel ───────────────────────────── */}
       {ticket.status === 'hitl' && (
         <div style={{
-          padding:         '16px',
-          backgroundColor: 'rgba(155,126,248,0.05)',
-          border:          '1px solid rgba(155,126,248,0.25)',
-          borderRadius:    'var(--radius-md)',
+          padding:         '16px 20px',
+          backgroundColor: 'rgba(124,58,237,0.04)',
+          border:          '1px solid rgba(124,58,237,0.20)',
+          borderRadius:    'var(--radius-lg)',
           display:         'flex',
           flexDirection:   'column',
           gap:             '12px',
+          boxShadow:       '0 2px 8px rgba(124,58,237,0.06)',
         }}>
           {/* Panel header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>

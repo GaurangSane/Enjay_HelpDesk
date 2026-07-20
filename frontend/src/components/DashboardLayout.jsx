@@ -56,15 +56,18 @@ export default function DashboardLayout() {
     display:         'flex',
     alignItems:      'center',
     gap:             '8px',
-    color:           isActive ? 'var(--text)' : 'var(--text-muted)',
+    color:           isActive ? 'var(--accent-primary)' : 'var(--text-muted)',
     textDecoration:  'none',
-    padding:         '8px 12px',
+    padding:         '7px 12px',
     borderRadius:    'var(--radius-md)',
     fontSize:        'var(--font-size-sm)',
     fontWeight:      isActive ? 600 : 400,
-    backgroundColor: isActive ? 'rgba(37,99,235,0.08)' : 'transparent',
-    borderLeft:      isActive ? '2px solid var(--accent-primary)' : '2px solid transparent',
-    transition:      'background-color 150ms ease, color 150ms ease, border-color 150ms ease',
+    backgroundColor: isActive ? 'rgba(37,99,235,0.09)' : 'transparent',
+    /* Active: colored left border as accent pill indicator */
+    borderLeft:      isActive ? '3px solid var(--accent-primary)' : '3px solid transparent',
+    paddingLeft:     isActive ? '10px' : '12px',  /* compensate for border width */
+    transition:
+      'background-color 150ms ease, color 150ms ease, border-color 150ms ease, padding 150ms ease',
   });
 
   // Sidebar nav content — same markup used in both desktop sidebar and mobile drawer

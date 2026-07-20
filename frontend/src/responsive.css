@@ -53,17 +53,19 @@
 
 /* Sidebar itself */
 .sidebar {
-  width: 220px;
+  width: 228px;    /* slightly wider for better spacing */
   flex-shrink: 0;
   background-color: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 24px 16px;
+  padding: 24px 14px;
   display: flex;
   flex-direction: column;
   gap: 32px;
   /* On desktop: static in flow */
   position: relative;
   z-index: auto;
+  /* Subtle right-edge shadow for depth */
+  box-shadow: 1px 0 0 var(--border), 4px 0 16px rgba(15,23,42,0.03);
 }
 
 /* Drawer close button (hidden on desktop) */
@@ -122,7 +124,9 @@
 /* ── 2. Topbar ──────────────────────────────────────────────────────────── */
 .topbar {
   height: 56px;
-  background-color: var(--surface);
+  background-color: rgba(255,255,255,0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
@@ -130,6 +134,9 @@
   padding: 0 24px;
   flex-shrink: 0;
   gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 @media (max-width: 767px) {
@@ -144,10 +151,15 @@
 /* Table wrapper — clips horizontal overflow on small screens */
 .ticket-table-wrap {
   background-color: var(--surface);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);   /* 12px — elevated card look */
   border: 1px solid var(--border);
   box-shadow: var(--shadow-card);
   overflow: hidden;
+  transition: box-shadow var(--transition-normal);
+}
+
+.ticket-table-wrap:hover {
+  box-shadow: var(--shadow-raised);
 }
 
 /* The native <table> — visible on desktop */
@@ -243,17 +255,43 @@
 /* ── 4. Tab bar ─────────────────────────────────────────────────────────── */
 .tab-bar {
   display: flex;
-  gap: 2px;
+  gap: 0;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  /* Hide scrollbar while still scrollable */
   scrollbar-width: none;
+  position: relative;
 }
 
 .tab-bar::-webkit-scrollbar {
   display: none;
+}
+
+/* Tab links get a smooth underline that slides in on active */
+.tab-bar a {
+  position: relative;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+/* Animated underline — grows from center */
+.tab-bar a::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  right: 50%;
+  height: 2px;
+  background-color: var(--accent-primary);
+  border-radius: 2px 2px 0 0;
+  transition: left var(--transition-normal), right var(--transition-normal);
+}
+
+.tab-bar a[aria-selected='true']::after {
+  left: 0;
+  right: 0;
 }
 
 /* ── 5. Ticket Detail — reply form ──────────────────────────────────────── */
@@ -261,14 +299,14 @@
 /* Desktop: side-by-side textarea + button column */
 .reply-form {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: flex-end;
 }
 
 .reply-form__actions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -279,8 +317,39 @@
   font-size: var(--font-size-sm);
   cursor: pointer;
   white-space: nowrap;
-  padding: 0 16px;
-  transition: filter 150ms ease, background-color 150ms ease, border-color 150ms ease;
+  padding: 0 18px;
+  /* Smooth multi-property transition */
+  transition:
+    filter var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+/* Send button (primary) — shadow + confident look */
+#send-reply-btn {
+  box-shadow: var(--shadow-btn);
+}
+
+#send-reply-btn:not(:disabled):hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(37,99,235,0.35), 0 1px 3px rgba(15,23,42,0.1);
+}
+
+#send-reply-btn:not(:disabled):active {
+  transform: scale(0.966);
+  box-shadow: var(--shadow-btn);
+}
+
+/* Polish button — subtle secondary shadow */
+#polish-draft-btn:not(:disabled):hover {
+  filter: brightness(1.08);
+  box-shadow: 0 2px 8px rgba(124,58,237,0.2);
+}
+
+#polish-draft-btn:not(:disabled):active {
+  transform: scale(0.966);
 }
 
 /* Mobile: stack textarea above full-width buttons */
@@ -326,11 +395,11 @@
 .auth-card {
   width: 100%;
   max-width: 420px;
-  padding: 32px;
+  padding: 36px;
   background-color: var(--surface);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);   /* 16px — elevated card */
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-modal);
 }
 
 @media (max-width: 767px) {
@@ -372,16 +441,27 @@
   font-size: var(--font-size-base);
   font-weight: 700;
   cursor: pointer;
-  transition: filter 150ms ease;
+  box-shadow: var(--shadow-btn);
+  transition:
+    filter var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .auth-submit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .auth-submit-btn:not(:disabled):hover {
-  filter: brightness(1.12);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(37,99,235,0.35), 0 1px 3px rgba(15,23,42,0.1);
+}
+
+.auth-submit-btn:not(:disabled):active {
+  transform: scale(0.975);
+  box-shadow: var(--shadow-btn);
 }
 
 /* ── 7. SaveToKBModal — button row ──────────────────────────────────────── */
